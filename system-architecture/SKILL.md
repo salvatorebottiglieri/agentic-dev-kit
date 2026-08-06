@@ -300,8 +300,13 @@ Classify the PRD before producing artifacts. Skip if:
 |---|---|
 | **Bug fix** | "400 error when X is null" — no new architecture |
 | **Trivial feature** | "Add phone field to profile" — follows existing pattern |
-| **Mechanical refactor** | "Rename UserService → AccountService" — no architectural change |
 | **Data only** | New table, no new endpoints or orchestration — data model only |
-| **Follows existing pattern** | New CRUD route identical to the 10 existing ones |
+
+**Mechanical refactor** and **follows existing pattern** skip the
+diagrams/contracts but NOT the invariant elicitation: if the touched module
+has domain laws (documented or new), the `## System Invariants` section must
+still be written (possibly reduced — law, negation, where verified); if
+there are none, the skip annotation must state "no domain laws" explicitly.
+The criteria judge domain value, not diff shape.
 
 
