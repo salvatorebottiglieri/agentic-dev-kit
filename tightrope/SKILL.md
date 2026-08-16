@@ -105,6 +105,13 @@ implements the originating spec or intent.
 
 #### Agent interpretation
 
+Both axes are **criteria families** (`~/agentic-workflow/WORKFLOW.md` →
+`## Review criteria family`). Every finding must quote **evidence** — a
+verbatim excerpt from the diff — and carry a **severity** (`fatal` /
+`advisory`). A finding without evidence is not accepted. Order the
+criteria by severity before deciding: `fatal` findings are escalated,
+never auto-resolved.
+
 Read both reports and classify every finding into one of three buckets:
 
 - **Resolved automatically** — clear-cut findings that match the user's
@@ -132,8 +139,8 @@ The decision process is:
    Present both sides to the user and ask how to resolve.
 
 **Completion criterion**: both reports are read, every finding is classified
-into one of the three buckets, and all actionable non-escalated findings are
-resolved.
+into one of the three buckets, every accepted finding carries verified
+evidence, and all actionable non-escalated findings are resolved.
 
 ### 2. Test
 

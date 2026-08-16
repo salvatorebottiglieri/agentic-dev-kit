@@ -79,6 +79,13 @@ When the implement subagent completes, spawn two `reviewer` subagents:
 
 Both reviewers are read-only — they report findings, they do not edit code.
 
+Reviews are **criteria families** — the taxonomy lives in
+`~/agentic-workflow/WORKFLOW.md` → `## Review criteria family`; paste the
+family into each reviewer's task (the reviewer has no other access to it).
+Every finding must quote **evidence** (file + lines + verbatim excerpt from
+the diff) and carry a **severity** (`fatal` blocks, `advisory` does not).
+A finding without evidence is not accepted.
+
 **Crucial**: pass the **full raw diff** (`git diff` or equivalent) in the
 reviewer's task, verbatim. Do NOT summarise, paraphrase, or excerpt the diff —
 a reviewer that receives only a summary may miss context and produce inaccurate
