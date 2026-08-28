@@ -94,6 +94,11 @@ decisions and user stories to derive the list.
 - Derive criteria from user stories, testing decisions, and acceptance criteria
   in the PRD. If the PRD doesn't have explicit criteria, synthesise them from
   the stories and solution.
+- **Cover every distinct persona** in the user stories — at least one
+  criterion per persona, phrased so it can fail ("an admin can X" is
+  checkable; "users love X" is not).
+- **Cover the edge-case states** — empty, error, loading, long content,
+  small viewport. A criterion that cannot fail is decoration.
 - Mark any that are clearly already met by existing functionality as `checked`.
 - Group related criteria visually with indentation or subtitles.
 
@@ -108,6 +113,11 @@ An HTML+CSS representation of the UI. This is **not** a screenshot or an image
   text blocks, using `#e0e0e0`, `#f5f5f5`, `#333`, etc.) — unless the project
   has clear brand colors, in which case use them for emphasis.
 - Lorum ipsum or `[placeholder text]` for content the PRD doesn't specify.
+- **No AI-look defaults**: avoid the generic AI-generated pattern set —
+  default purple/indigo gradient heroes, centered glassmorphism cards,
+  near-identical card rows, filler copy. Derive the palette and layout from
+  the project's brand (CSS variables) or, when the project has none, from a
+  reference site's design system; state which you used.
 - Show realistic structure: real header, real nav items, real button labels
   from the PRD.
 - If the change affects multiple screens/states (e.g., empty state, error

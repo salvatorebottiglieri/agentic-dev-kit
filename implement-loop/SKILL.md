@@ -136,9 +136,19 @@ code changes need documentation updates:
 4. **No news is good news**: if nothing documented changed, skip this phase
    entirely. The PR step proceeds directly.
 
-## 5. PR
+## 5. UI verification (only when the item touches UI)
 
-When all items pass review and docs are aligned:
+Before the PR, drive the built UI in a real browser (OMP: the `browser`
+tool) through the **personas and edge cases from the phase-2 success
+criteria** — at least one scenario per persona, plus the empty/error/
+loading states. This is a usability pass, not a visual one: navigate,
+submit, observe real state changes, check that nothing blocks the happy
+path. Findings go through the implement/fix loop like review findings.
+Skip when the item is API-only or the UI diff has no interaction change.
+
+## 6. PR
+
+When all items pass review, docs are aligned, and the UI pass is clean:
 
 1. `git checkout -b <branch-name>` (descriptive, e.g. `feat-<issue-number>`)
 2. `git add` the changed files (only what belongs to the task)
@@ -163,4 +173,6 @@ The loop is done with an item when:
 - All tests pass (existing + new)
 - A reviewer (Standards + Spec) reports zero actionable findings
 - Docs are aligned with the change (or confirmed unnecessary)
+- UI items: the browser verification pass ran (personas × edge cases)
+  with no open usability findings
 - The item is referenced in a PR or commit
