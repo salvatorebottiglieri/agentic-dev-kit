@@ -2,7 +2,9 @@
 name: implement-loop
 description: |
   Process a batch of work items: implement each via a TDD subagent, review
-  via a reviewer subagent, fix until clean, align docs, then create a PR.
+  via three reviewer subagents (Standards + Spec + Ponytail, tensions
+  resolved by the user's weight), fix until clean, align docs, pass the
+  canonical test/lint gate, then create a PR held to CI green.
 
   Use when the user says "implement these issues", "process this queue",
   "agentic loop", or passes a list of items to implement. User-invoked only.
@@ -26,6 +28,9 @@ every change, every file edit, every test runs inside a subagent.
 - Check for dependencies between items — order them so no item depends on
   unmerged work. Resolve dependencies sequentially; run independent items in
   parallel in separate git worktrees.
+- Note the user's **weight** for tension resolution (applies to the whole
+  run): `balanced` (default — every real tension escalates to the human) or
+  `--lean ponytail` / `--lean engineering`.
 
 ## 1. Spawn implementer
 
@@ -61,7 +66,7 @@ and skip making edits.
 
 ## 2. Spawn reviewers
 
-When the implement subagent completes, spawn two `reviewer` subagents:
+When the implement subagent completes, spawn three `reviewer` subagents:
 
 - **Standards review**: full diff against HEAD + code smell baseline (Fowler,
   Refactoring ch.3). Report per-file findings.
@@ -76,8 +81,14 @@ When the implement subagent completes, spawn two `reviewer` subagents:
   When the item body has a `## System Invariants` section, additionally
   verify **invariant coverage**: every invariant has a test pinning its
   negation, and the test would fail on a violation (not vacuously green).
+- **Ponytail review**: run `/ponytail-review` against the same diff. It
+  returns a structured delete-list (`delete` / `stdlib` / `native` / `yagni`
+  / `shrink`) with a net lines-removable count. This axis finds complexity
+  to remove, not correctness — if the report says "Lean already. Ship.",
+  the axis finds nothing.
 
-Both reviewers are read-only — they report findings, they do not edit code.
+All three reviewers are read-only — they report findings, they do not edit
+code.
 
 Reviews are **criteria families** — the taxonomy lives in
 `~/agentic-workflow/WORKFLOW.md` → `## Review criteria family`; paste the
@@ -85,6 +96,25 @@ family into each reviewer's task (the reviewer has no other access to it).
 Every finding must quote **evidence** (file + lines + verbatim excerpt from
 the diff) and carry a **severity** (`fatal` blocks, `advisory` does not).
 A finding without evidence is not accepted.
+
+**Tension resolution (after all three axes report).** Where the ponytail
+axis and the engineering axes (Standards + Spec) flag the same code in
+opposite directions — ponytail says "remove this abstraction", engineering
+says "this needs tests at a public boundary" — you have a `tension`. Resolve
+it by the user's chosen weight:
+
+- **balanced (default)** — every real tension escalates to the human: present
+  both sides verbatim (evidence + severity) and ask which way to land. Never
+  guess.
+- **`--lean ponytail`** — auto-resolve the tension by removing: apply the
+  ponytail finding; note the engineering gap as advisory.
+- **`--lean engineering`** — auto-resolve the tension by keeping: apply the
+  engineering finding; note the ponytail finding as advisory.
+
+`fatal` engineering findings are escalated regardless of lean. When both
+axes flag the same code independently (not in conflict), each finding is
+resolved on its own merit — lean only breaks ties between the axes on the
+same concern.
 
 **Crucial**: pass the **full raw diff** (`git diff` or equivalent) in the
 reviewer's task, verbatim. Do NOT summarise, paraphrase, or excerpt the diff —
@@ -100,7 +130,7 @@ the loop manager's.
 
 ## 3. Spawn fixer
 
-If either review finds actionable issues:
+If any review finds actionable issues (or an unresolved tension):
 
 1. **Spawn a fresh implement subagent** to fix them. Pass the review findings **verbatim** as task context.
 2. In the task, tell the subagent *which files* to change and *what
@@ -111,7 +141,8 @@ If either review finds actionable issues:
    a fresh context prevents this by forcing you to put every instruction
    in the task string.
 4. When the fix subagent completes, go back to **step 2** (re-review).
-5. Exit the loop only when both reviews return **zero actionable findings**.
+5. Exit the loop only when all reviews return **zero actionable findings**
+   and every tension is resolved (escalated or resolved by weight).
 
 The only exception to full delegation: purely mechanical findings
 (whitespace, typos, comments) you may fix yourself. Anything behavioural,
@@ -146,16 +177,35 @@ submit, observe real state changes, check that nothing blocks the happy
 path. Findings go through the implement/fix loop like review findings.
 Skip when the item is API-only or the UI diff has no interaction change.
 
-## 6. PR
+## 6. Pre-push gate (test + lint)
 
-When all items pass review, docs are aligned, and the UI pass is clean:
+Before the PR, run the **canonical** full-suite test and lint on the whole
+repo — not just the subagent's tests:
+
+1. **Test.** Determine the canonical command from the project's config
+   (`pyproject.toml`, `tox.ini`, `setup.cfg`, `pytest.ini` for Python; the
+   equivalent for other languages). Default scope: unit tests; the user can
+   widen with `--test-scope integration` or `all`.
+2. **Lint.** Determine the canonical linter from config (prefer `ruff` →
+   `ruff.toml`/`pyproject.toml`, then `flake8`, then `pylint`) and run it.
+3. **Red → fixer.** If test or lint fails, spawn a fresh fixer subagent with
+   the failures verbatim, then re-review (step 2) and re-run the gate.
+4. Only proceed to the PR when test and lint are both green.
+
+## 7. PR (hold until CI green)
+
+When all items pass review, docs are aligned, the UI pass is clean, and the
+pre-push gate is green:
 
 1. `git checkout -b <branch-name>` (descriptive, e.g. `feat-<issue-number>`)
 2. `git add` the changed files (only what belongs to the task)
 3. `git commit -m "..."` with a conventional commit message referencing the items
 4. `git push origin <branch-name>`
 5. Create a PR using the project's standard tooling (ask the user how).
-6. Close/resolve each completed item in the issue tracker.
+6. **Wait for CI to be green** before declaring the item done; if CI goes
+   red, spawn a fixer, re-push, and wait again. Do not merge yourself — hand
+   the PR to the user for review and merge.
+7. Close/resolve each completed item in the issue tracker.
 
 ## Dependency resolution
 
@@ -170,9 +220,10 @@ When all items pass review, docs are aligned, and the UI pass is clean:
 
 The loop is done with an item when:
 - All acceptance criteria from the item description are met
-- All tests pass (existing + new)
-- A reviewer (Standards + Spec) reports zero actionable findings
+- All tests pass (existing + new) and the canonical repo test + lint are green
+- All three reviewers (Standards + Spec + Ponytail) report zero actionable
+  findings, and every tension is resolved (escalated or resolved by weight)
 - Docs are aligned with the change (or confirmed unnecessary)
 - UI items: the browser verification pass ran (personas × edge cases)
   with no open usability findings
-- The item is referenced in a PR or commit
+- The PR is open and CI is green (I1 — CI-before-merge)

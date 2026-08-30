@@ -4,7 +4,9 @@ description: >
   Produce program design artifacts (call-stack tree, file-tree diff, type
   signatures) for a ticket and append them to the issue on the tracker.
   Use between /to-tickets and implement-loop to give the implement and review
-  subagents a concrete contract before they write code.
+  subagents a concrete contract before they write code. Runs near-always —
+  skip only when there is no shape to design (one-shot throwaway, pure
+  config/data, mechanical rename/move).
 disable-model-invocation: true
 ---
 
@@ -122,15 +124,22 @@ function handleCreateResource(req: Request): Promise<Response>
 
 ### 3. When to skip (classify the change)
 
-Before producing artifacts, classify the ticket. If it matches any of these,
-skip program design entirely, append a one-line note to the ticket, and stop:
+Program design runs **near-always**. Skip only when there is no *shape* to
+design — the change introduces or modifies zero functions, types, or control
+flow. If it matches any of these, skip program design, append a one-line note
+to the ticket, and stop:
 
 | Type | Example | Reason |
 |---|---|---|
-| **Bug fix** | "NullPointerError when include is empty" | The diagnosis is the real work; fix is 2 lines |
-| **Mechanical refactor** | "Rename `UserService` → `AccountService`" | LSP rename is enough |
-| **Trivial feature** | "Add `phone` field to profile" | Follows existing pattern exactly |
-| **One-shot** | One-off script, data migration | No reusable design needed |
+| **One-shot throwaway** | One-off script, scratch data migration | No reusable shape to design |
+| **Pure config/data** | "Add a static field with no new function" | Introduces zero signatures |
+| **Mechanical rename/move** | "Rename `UserService` → `AccountService`" (no logic change) | LSP rename is enough; no new shape |
+
+Anything that introduces or modifies a function, type, or control flow —
+including **bug fixes** and **"trivial" features** — gets program design.
+A bug fix that only tweaks two lines of logic inside an existing function
+can still skip, but only if it changes no signature and no control flow.
+When in doubt, do it: it costs minutes and prevents hours of rework.
 
 
 ### 4. Append to the ticket
