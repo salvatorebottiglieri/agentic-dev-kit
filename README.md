@@ -12,17 +12,20 @@ Process a batch of work items: implement each via a TDD subagent, review via a r
 /skill:implement-loop
 ```
 
-### `tightrope`
+### `tightrope` — DEPRECATED (2026-08-30)
 
-Gate code changes against the tightrope between ponytail minimalism and
-engineering soundness — runs `/ponytail-review` and `/code-review`,
-then interprets both reports to resolve or escalate. Pipeline: tension
-check → test → lint → PR gate.
-
-```
-/tightrope [--lean ponytail|engineering] [--skip <stage>] [--intent "..."]
-/tightrope <task description>
-```
+> **Deprecated.** Folded into `/implement-loop`: the ponytail-vs-engineering
+> tension is now its **third review axis**, and the test / lint / PR gate is
+> its **pre-push gate**. The skill folder stays as a historical record
+> (`disable-model-invocation: true`), it is no longer installed and no longer
+> documented as a command.
+>
+> If you were reaching for `/tightrope`, run `/implement-loop` on the same
+> items instead. The ponytail axis is `ponytail-review`; the engineering axes
+> are `code-review` (Standards + Spec); the criteria-family taxonomy lives in
+> `~/agentic-workflow/WORKFLOW.md` phase 6. The rule change is recorded in
+> `RATIONALE.md` D-010 (folded into the review) and D-011 (the gate moves into
+> implement-loop).
 
 
 ### `product-review` ⚠️ WIP
@@ -65,12 +68,13 @@ check → test → lint → PR gate.
 
 ### omp
 
-omp reads skills from `~/.agents/skills/`. Copy the skill folders:
+omp reads skills from `~/.agents/skills/`. Copy the skill folders (`tightrope`
+excluded — deprecated):
 
 ```bash
 cp -r ~/sb-skills/implement-loop ~/sb-skills/product-review \
       ~/sb-skills/program-design ~/sb-skills/system-architecture \
-      ~/sb-skills/tightrope ~/.agents/skills/
+      ~/.agents/skills/
 ```
 
 Or symlink them instead, so the repo stays the single source of truth:
@@ -78,8 +82,11 @@ Or symlink them instead, so the repo stays the single source of truth:
 ```bash
 ln -s ~/sb-skills/implement-loop ~/sb-skills/product-review \
       ~/sb-skills/program-design ~/sb-skills/system-architecture \
-      ~/sb-skills/tightrope ~/.agents/skills/
+      ~/.agents/skills/
 ```
+
+A deprecated skill that is still installed is still discoverable: delete
+`~/.agents/skills/tightrope` if it is there from an earlier install.
 
 ### Claude Code
 
