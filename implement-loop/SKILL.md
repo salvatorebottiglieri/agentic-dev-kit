@@ -3,8 +3,9 @@ name: implement-loop
 description: |
   Process a batch of work items: implement each via a TDD subagent, review
   via three reviewer subagents (Standards + Spec + Ponytail, tensions
-  resolved by the user's weight), fix until clean, align docs, pass the
-  canonical test/lint gate, then create a PR held to CI green.
+  resolved by the user's weight), prove the invariant coverage by executed
+  mutation, fix until clean, align docs, pass the canonical test/lint gate,
+  then create a PR held to CI green.
 
   Use when the user says "implement these issues", "process this queue",
   "agentic loop", or passes a list of items to implement. User-invoked only.
@@ -48,6 +49,19 @@ Spawn an implement subagent with a fresh context window (e.g. `task` in OMP). It
   (green). An invariant whose test cannot fail must be flagged back, not
   silently dropped (anti-vacuity: a check that never fails is worse than no
   check).
+- **Witness value — the fixture must discriminate.** Red-green proves the
+  test fails against *nothing*; it does not prove it fails against the
+  **plausible wrong implementation**. Require the subagent to pick, for
+  every invariant, an input on which the correct implementation and the
+  plausible wrong one **diverge**, and to state it in one line: "witness
+  `<value>` — distinguishes `<correct>` from `<wrong>`". Banned: a fixture
+  that is a **fixed point** of the transformation under suspicion —
+  `"1.0.0"` for a version normaliser, an already-sorted list for a sort, a
+  space-free string for a trim, `1` or `0` for a coefficient, disjoint
+  dicts for a precedence rule, an id equal to its index, a single-element
+  collection for anything about order or merging. A fixed-point fixture is
+  green under every implementation, so it survives any reading of the diff
+  — which is exactly why it must be caught here, where it costs one line.
 - **Execution order**: instruct the subagent to work **middle-out** — API
   contract first (define the endpoint signature with a stub handler), then
   the consumer (frontend, CLI, or caller), then the service layer, then the
@@ -97,6 +111,21 @@ Every finding must quote **evidence** (file + lines + verbatim excerpt from
 the diff) and carry a **severity** (`fatal` blocks, `advisory` does not).
 A finding without evidence is not accepted.
 
+**Verify the reviewers like the code — brief coverage is mandatory.**
+Enumerate each reviewer's brief as a numbered list of items *before*
+spawning it (Standards: each standards file and each ADR the ticket cites;
+Spec: each `- [ ]` acceptance criterion and each `## System Invariants`
+law), and require **one line of answer per item**, with an explicit verdict
+including `pass` and `n/a — <reason>`. Then **check the coverage
+mechanically**: every numbered item must appear in the report, or the
+report is rejected and the reviewer re-spawned with the missing items named.
+
+Reason: a free-form finding list makes "conforms", "not applicable" and
+"never read" indistinguishable, so a reviewer can silently drop an item
+that was in its own brief and the omission looks like a clean bill of
+health. Counting items is something you can do without reading the code;
+judging findings is not.
+
 **Tension resolution (after all three axes report).** Where the ponytail
 axis and the engineering axes (Standards + Spec) flag the same code in
 opposite directions — ponytail says "remove this abstraction", engineering
@@ -128,6 +157,47 @@ the review criteria you provide, not the entire chat history. A reviewer that
 inherits the parent session may confuse its mandate with the implementer's or
 the loop manager's.
 
+## 2b. Prove the coverage (mutation prover)
+
+Run **once, after all three axes have closed** — not on every fix-loop
+iteration. Skip only when the item declares no invariants and has no
+`fatal` acceptance criterion.
+
+The three reviewers are read-only and you never edit code, so the proof
+needs its own role: spawn a **prover subagent**, read-write but confined to
+a **throwaway copy** — `git worktree add ../<repo>-mutprove-<slug> HEAD`,
+a sibling directory, **never inside the repo** (a nested copy is untracked
+content in the session's own diff — WORKFLOW.md, session isolation) and
+never the session's working tree. Its task:
+
+1. **The target list**, built by you from the Spec reviewer's report: for
+   each declared law and each `fatal` acceptance criterion, the file and
+   line(s) that implement it and the test(s) that claim to cover it.
+2. **One plausible-wrong mutation per target** — the alternative a
+   competent implementer could have written: normalise instead of passing
+   through, read a sibling column, coalesce a default, flip a boundary
+   (`<` ↔ `<=`), drop a guard, return the input unchanged.
+3. **Run the targeted suite per mutant**, revert it, move to the next.
+4. **Report the matrix** mutant → outcome, and for every mutant the diff
+   that produced it.
+5. **Destroy the copy** (`git worktree remove`) — the proof leaves no
+   branch and no commit behind.
+
+Reading the matrix:
+
+- **red** → `pinned`. The coverage claim is proven.
+- **green** → `blind-test`, `fatal`: a test exists, exercises the line, and
+  cannot tell right from wrong. This is the defect class that survives
+  every reading of the diff. The fix is a **new assertion or a new witness
+  value**, not a new test file — and the mutant must go red afterwards.
+- **no test to run** → `no-test`, `fatal`, and a *different* finding from
+  `blind-test`. Do not collapse the two: "no coverage" said of a blind test
+  is a false statement about a real problem, and it sends the fixer to
+  write a test that already exists.
+
+Findings from the matrix enter the fix loop like any other, and the mutant
+is re-run after the fix.
+
 ## 3. Spawn fixer
 
 If any review finds actionable issues (or an unresolved tension):
@@ -140,9 +210,11 @@ If any review finds actionable issues (or an unresolved tension):
    tests. A fix subagent that inherits context may plan without acting —
    a fresh context prevents this by forcing you to put every instruction
    in the task string.
-4. When the fix subagent completes, go back to **step 2** (re-review).
-5. Exit the loop only when all reviews return **zero actionable findings**
-   and every tension is resolved (escalated or resolved by weight).
+4. When the fix subagent completes, go back to **step 2** (re-review), then
+   **step 2b** for any target whose mutant was green.
+5. Exit the loop only when all reviews return **zero actionable findings**,
+   every mutant in the matrix is red, and every tension is resolved
+   (escalated or resolved by weight).
 
 The only exception to full delegation: purely mechanical findings
 (whitespace, typos, comments) you may fix yourself. Anything behavioural,
@@ -222,7 +294,11 @@ The loop is done with an item when:
 - All acceptance criteria from the item description are met
 - All tests pass (existing + new) and the canonical repo test + lint are green
 - All three reviewers (Standards + Spec + Ponytail) report zero actionable
-  findings, and every tension is resolved (escalated or resolved by weight)
+  findings, each having answered **every item of its brief** (coverage
+  checked mechanically), and every tension is resolved (escalated or
+  resolved by weight)
+- Every declared invariant is `pinned` by an **executed** mutation (the
+  matrix of step 2b is all-red); no `blind-test`, no `no-test`
 - Docs are aligned with the change (or confirmed unnecessary)
 - UI items: the browser verification pass ran (personas × edge cases)
   with no open usability findings
