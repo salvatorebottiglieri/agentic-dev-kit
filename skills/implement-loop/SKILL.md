@@ -105,7 +105,7 @@ All three reviewers are read-only — they report findings, they do not edit
 code.
 
 Reviews are **criteria families** — the taxonomy lives in
-`~/agentic-workflow/WORKFLOW.md` → `## Review criteria family`; paste the
+`~/agentic-dev-kit/WORKFLOW.md` → `## Review criteria family`; paste the
 family into each reviewer's task (the reviewer has no other access to it).
 Every finding must quote **evidence** (file + lines + verbatim excerpt from
 the diff) and carry a **severity** (`fatal` blocks, `advisory` does not).

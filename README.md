@@ -1,105 +1,89 @@
-# sb-skills
+# agentic-dev-kit
 
-My agent skills collection.
+[![version](https://img.shields.io/github/v/tag/salvatorebottiglieri/agentic-dev-kit?label=version&sort=semver)](CHANGELOG.md)
+[![license: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## Skills
+An opinionated, phase-by-phase workflow for building software with an AI
+coding agent — from a raw idea to a merged PR — plus the custom skills and the
+audit gate that enforce it.
 
-### `implement-loop`
+The method is **agent-agnostic**: `WORKFLOW.md` is plain process, readable by
+any agent. The skills ship in the portable *agent-skills* (`SKILL.md`) format,
+which Claude Code loads natively and other agents can adopt.
 
-Process a batch of work items: implement each via a TDD subagent, review via a reviewer subagent, fix until clean, then create a PR. Issue-tracker-agnostic.
+`WORKFLOW.md` is the entry point: it defines the pipeline every session
+follows (design → product review → system architecture → tickets → program
+design → implement-loop) and the review criteria family that gates a merge.
 
-```
-/skill:implement-loop
-```
+## What's in here
 
-### `tightrope` — DEPRECATED (2026-08-30)
+| Path | What it is |
+|---|---|
+| `WORKFLOW.md` | **Start here.** The operational spec — the phases, in order, and the rules. |
+| `INVARIANTS.md` / `INVARIANTS-METHOD.md` | The workflow invariants (I1–I6) the audit enforces, and the theory behind them. |
+| `RATIONALE.md` | The *why* of every load-bearing rule. |
+| `skills/` | The four custom skills the workflow invokes (`implement-loop`, `product-review`, `system-architecture`, `program-design`). |
+| `audit.py` + `tests/` | The session-end gate: verifies the invariants against the tracker. |
+| `handoffs/` | Where your own session handoffs land (starts empty). |
 
-> **Deprecated.** Folded into `/implement-loop`: the ponytail-vs-engineering
-> tension is now its **third review axis**, and the test / lint / PR gate is
-> its **pre-push gate**. The skill folder stays as a historical record
-> (`disable-model-invocation: true`), it is no longer installed and no longer
-> documented as a command.
->
-> If you were reaching for `/tightrope`, run `/implement-loop` on the same
-> items instead. The ponytail axis is `ponytail-review`; the engineering axes
-> are `code-review` (Standards + Spec); the criteria-family taxonomy lives in
-> `~/agentic-workflow/WORKFLOW.md` phase 6. The rule change is recorded in
-> `RATIONALE.md` D-010 (folded into the review) and D-011 (the gate moves into
-> implement-loop).
+## Two layers — mind the prerequisite
 
+This kit is a **layer on top of** [Matt Pocock's skills](https://github.com/mattpocock/skills)
+(MIT). The backbone flow it orchestrates — `grill-with-docs`, `to-spec`,
+`to-tickets`, `implement`, `tdd`, `code-review`, `ponytail-review`,
+`domain-modeling`, `ask-matt` — lives there, not here. This repo adds the
+orchestration doc (`WORKFLOW.md`), the invariant gate (`audit.py`), and four
+skills that slot into the flow.
 
-### `product-review` ⚠️ WIP
-
-> **Work in progress.** First version, not yet battle-tested.
->
-> Produce a visual HTML review of a PRD — problem statement, success criteria,
-> and wireframe mockup — to align on what the user sees before designing
-> architecture. Designed to be used between `/to-spec` and `/system-architecture`.
-
-```
-/product-review <prd-number>
-```
-
-### `system-architecture` ⚠️ WIP
-
-> **Work in progress.** First version, not yet battle-tested.
->
-> Design system architecture for a PRD: produce Mermaid sequence/state
-> diagrams, endpoint contracts, and data models, then append them to the
-> PRD on the tracker. Designed to be used between `/to-spec` and `/to-tickets`.
-
-```
-/system-architecture <prd-number>
-```
-
-### `program-design` ⚠️ WIP
-
-> **Work in progress.** First version, not yet battle-tested.
->
-> Produce program design artifacts (call-stack tree, file-tree diff, type
-> signatures) for a ticket and append them to the ticket on the tracker.
-> Designed to be used between `/to-tickets` and `implement-loop`.
-
-```
-/program-design <ticket-number>
-```
-
-## Install
-
-### omp
-
-omp reads skills from `~/.agents/skills/`. Copy the skill folders (`tightrope`
-excluded — deprecated):
+**Install the base layer first**, then this one:
 
 ```bash
-cp -r ~/sb-skills/implement-loop ~/sb-skills/product-review \
-      ~/sb-skills/program-design ~/sb-skills/system-architecture \
-      ~/.agents/skills/
+# 1. base layer — Matt Pocock's skills (see that repo's install steps)
+#    https://github.com/mattpocock/skills
+
+# 2. this kit
+git clone https://github.com/salvatorebottiglieri/agentic-dev-kit.git ~/agentic-dev-kit
+cd ~/agentic-dev-kit
+./install.sh
 ```
 
-Or symlink them instead, so the repo stays the single source of truth:
+`install.sh` symlinks the four skills from `skills/` into your agent's skills
+directory and leaves the docs and `audit.py` in the clone. It defaults to
+`~/.claude/skills` (Claude Code); point it elsewhere for any other agent:
 
 ```bash
-ln -s ~/sb-skills/implement-loop ~/sb-skills/product-review \
-      ~/sb-skills/program-design ~/sb-skills/system-architecture \
-      ~/.agents/skills/
+AGENT_SKILLS_DIR=~/.agents/skills ./install.sh
 ```
 
-A deprecated skill that is still installed is still discoverable: delete
-`~/.agents/skills/tightrope` if it is there from an earlier install.
+It never overwrites a skill you already have without asking.
 
-### Claude Code
+## Using it
 
-Symlink the skills you want into `.claude/skills/`:
+Have your coding agent read `~/agentic-dev-kit/WORKFLOW.md` at the start of any
+non-trivial coding work — the usual way is a rule in the agent's global or
+project instructions file (`CLAUDE.md`, `AGENTS.md`, or your agent's
+equivalent). Then follow its phases. A typo fix, a one-line config change, or a
+question about code does not need the pipeline.
 
-```bash
-# In your project or globally
-mkdir -p ~/.claude/skills
-ln -s ~/sb-skills/* ~/.claude/skills/
-```
+## Caveats
 
-Or reference them in `CLAUDE.md` / `CLAUDE_GLOBAL.md`:
+- **`audit.py` is GitHub-only** (it reads issues/PRs via the `gh` CLI). On
+  GitLab, Bitbucket, or a local tracker the session-end gate is manual — the
+  handoff is still the auditable artifact.
+- The skills use the `SKILL.md` + `skill://` invocation convention. Agents
+  that don't support it can still follow `WORKFLOW.md` and read each
+  `skills/<name>/SKILL.md` as a plain instruction file.
+- The custom skills marked *WIP* in their own `SKILL.md`
+  (`product-review`, `system-architecture`, `program-design`) are first
+  versions, not yet battle-tested.
 
-```markdown
-See skills in ~/sb-skills/ for reusable workflows.
-```
+## Versioning
+
+Released under [Semantic Versioning](https://semver.org/); see
+[`CHANGELOG.md`](CHANGELOG.md) and the git tags. Pin a specific version by
+checking out its tag (e.g. `git checkout v0.1.0`).
+
+## License
+
+MIT — see `LICENSE`. The base-layer skills are Matt Pocock's, under his repo's
+MIT license — not redistributed here; install them from the upstream.
