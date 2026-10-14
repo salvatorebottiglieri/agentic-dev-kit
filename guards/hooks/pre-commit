@@ -1,0 +1,4 @@
+#!/bin/sh
+# pre-commit — thin shim: the gate logic lives in ../gate.py (stdlib Python).
+# Installed by `install.sh --gate <repo>` (sets core.hooksPath to this dir).
+exec python3 "$(dirname "$0")/../gate.py" pre-commit

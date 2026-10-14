@@ -16,6 +16,14 @@
 - **Every decision entry cites its rule location** (WORKFLOW.md section or
   skill) and its source (handoff, commit, issue).
 - WORKFLOW.md's General rules points to this document (two-way link).
+- **Since 2026-10-09 (R-001) WORKFLOW.md is an index.** In this contract
+  "WORKFLOW.md" means the index *and* every file it points to. Entries
+  written before that date are not rewritten — they cite the location at the
+  time, which maps as: "WORKFLOW.md phase N" → `phases/N-*.md` (phase 4 stays
+  in the index; the phase-7 note is in `phases/6-implement-loop.md`);
+  "`## Review criteria family`" → `REVIEW-CRITERIA.md`; "Session isolation"
+  → `SESSION-ISOLATION.md`; "General rules" and "Workflow invariants" stay
+  in `WORKFLOW.md`.
 - Append new decisions with the next `D-###` id; revise an existing decision
   in place when the rule changes, keeping the date.
 - The enforcement layer is INVARIANTS.md + audit.py; this document is the
@@ -744,6 +752,39 @@ TARGET.md records the evolution; this document records the reasons.
   the code", and the completion criterion).
 - **Source.** Session 2026-09-24, implement-loop run; both reviewer errors
   reported by the loop manager agent.
+
+## D-022 — Facts the review needs are computed by a tool into the commit, not reported by the agent (2026-10-13)
+
+- **Context.** In an A/B replay of the workflow (round 1, 2026-10-12) the
+  variant with textual reporting rules wrote the requested labels every time,
+  yet missed the actual facts (e.g. which tests were skipped) as often as the
+  variant without those rules. A check verifying that the labels are present
+  would have passed the same runs: the rules shaped the form of the report,
+  not its content.
+- **Decision.** A git pre-commit hook (`guards/gate.py`, installed with
+  `install.sh --gate <repo>`) computes the facts — first the skipped tests,
+  read from the JUnit report of the configured test command — and stages
+  them into the same commit as `.workflow/gate-report.md`. It blocks the
+  commit only when it cannot run — the causes are listed in README
+  § "Pre-commit gate"; inconclusive counts as fail.
+- **Rationale.**
+  1. **A fact computed by a tool cannot be misreported.** The review reads
+     the report from the commit; the agent neither writes nor summarises it.
+  2. **Why a git hook.** It is agent-independent — any agent, or a human,
+     committing in the repository runs it — and managed agent settings may
+     disable agent-specific hooks, while a repo-local `core.hooksPath` is
+     plain git.
+  3. **Why block only when it cannot run.** Failing tests are the canonical
+     test gate's job; a gate that silently produced no report would read
+     like a clean one.
+  4. **Known bypasses** (`--no-verify`, changing `core.hooksPath`, editing
+     the gate) are left to a later after-the-fact check; deselected tests are
+     not listed, since JUnit does not contain them and console output is not
+     parsed.
+- **Rule location.** `WORKFLOW.md` (`## Where each rule is enforced`, row
+  "Skipped tests listed in the commit by a tool"); `guards/gate.py`;
+  `README.md` ("Pre-commit gate").
+- **Source.** Issue #2 of this repository.
 
 ---
 

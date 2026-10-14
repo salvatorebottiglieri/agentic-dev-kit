@@ -7,9 +7,17 @@
 #     AGENT_SKILLS_DIR=~/.agents/skills ./install.sh
 # Idempotent: an existing correct link is left alone; anything else is only
 # replaced after you confirm. The docs and audit.py stay in this clone.
+#
+#     ./install.sh --gate <repo>
+# installs the pre-commit gate into <repo> instead (repo-local core.hooksPath
+# pointing at guards/hooks; see README "Pre-commit gate"). No skill is linked.
 set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ "${1:-}" == "--gate" ]]; then
+  exec python3 "$KIT_DIR/guards/gate.py" install "${@:2}"
+fi
 SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.claude/skills}"
 SKILLS=(implement-loop product-review system-architecture program-design)
 
