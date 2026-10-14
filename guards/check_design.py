@@ -84,7 +84,11 @@ def real_functions(root: Path) -> dict[str, list[dict]]:
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
+            # `ast.AsyncFunctionDef` is NOT a subclass of `ast.FunctionDef`
+            # (both derive from `stmt`); indexing only the latter makes every
+            # `async def` invisible to the gate, which in an ASGI codebase is
+            # most of the code.
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             args = node.args
             pos = [a.arg for a in args.args if a.arg not in ("self", "cls")]

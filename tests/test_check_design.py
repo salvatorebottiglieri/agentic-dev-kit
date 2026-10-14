@@ -115,3 +115,28 @@ def test_gate_ignores_the_stale_state(tmp_path: Path, capsys) -> None:
     assert CD.main(argv) == 1               # full: the state is false
     assert CD.main(argv + ["--gate"]) == 0  # gate: the state is not checked
     capsys.readouterr()
+
+
+def test_async_functions_are_indexed(tmp_path: Path) -> None:
+    """`ast.AsyncFunctionDef` is not a subclass of `ast.FunctionDef`: indexing
+    only the latter makes every `async def` look new, so the gate can verify
+    neither a signature nor a state against an ASGI codebase — where most
+    functions are async. Found by the field test on an async project (#333)."""
+    (tmp_path / "mod.py").write_text(
+        "async def handler(a, b=1):\n    return a\n\n\ndef plain(c):\n    return c\n",
+        encoding="utf-8")
+    real = CD.real_functions(tmp_path)
+    assert "handler" in real, "the async function is invisible to the gate"
+    assert real["handler"][0]["required"] == ["a"]
+    assert real["handler"][0]["optional"] == ["b"]
+    assert "plain" in real
+
+
+def test_state_of_an_async_function_is_visible(tmp_path: Path) -> None:
+    """The concrete failure the missing index produced: a node declared `mod`
+    on an existing async function was reported as non-existent."""
+    (tmp_path / "mod.py").write_text("async def sync_it(x):\n    return x\n",
+                                     encoding="utf-8")
+    doc = {"data_flow": {"nodes": [{"id": "mod.sync_it", "module": "mod.py",
+                                    "kind": "mod"}]}}
+    assert CD.check_states(doc, CD.real_functions(tmp_path)) == []
