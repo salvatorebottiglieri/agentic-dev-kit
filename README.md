@@ -173,6 +173,42 @@ line per problem on stderr as `gate: final: <problem>`, in this order:
 Exit 0, with no output, only when the committed report is present and current
 and the hook intact; 1 otherwise; 2 on bad arguments.
 
+## DesignDoc gate
+
+A repository that keeps its phase-5 designs in `docs/design/*.md` gets a
+second gate. The design file is prose plus a fenced `json design` block with
+the machine part — call stack, file tree, signatures, data flow, and one
+contract per call with its exits. `guards/check_design.py` checks it
+(stdlib only, no browser):
+
+```bash
+python3 guards/check_design.py docs/design/<feature>.md .          # full: state included
+python3 guards/check_design.py docs/design/<feature>.md . --gate   # pre-push/CI: no state
+```
+
+- **signatures** — every function the document declares is compared with the
+  real code: `compatible` / `shortened` / `proposed` / `new`, and
+  `incompatible` (a required parameter omitted) exits non-zero.
+- **coherence** — contract sites, nodes and edges may not contradict each
+  other; signatures live in one place.
+- **exits** — all four kinds (`returns`, `absent`, `raises`, `effect`) must be
+  declared, and every dispatchable one (`returns`, `absent`, `raises`) needs a
+  real `handled_at`. A contract without `raises` is silent, which is
+  indistinguishable from a forgotten exit.
+- **frontier** — a contract that calls outside the repo (free-text `call`, or a
+  ghost node) must declare `residual`: what happens to the exits it did not
+  enumerate. A library's exception set is not readable with `ast`, so the check
+  verifies the declared residual, not the library.
+- **state** — `add` / `mod` / `keep` is verified against the code. This one is
+  **not** checked by `--gate`: it is true only while the code does not exist,
+  so at pre-push it would be stale by construction. The full mode runs at the
+  end of phase 5.
+
+`guards/hooks/pre-push` runs `--gate` over every `docs/design/*.md` (and
+`*.json`) in the repository at push time; it is installed by the same
+`core.hooksPath` as the pre-commit gate (`./install.sh --gate <repo>`). A
+repository without `docs/design/` has nothing to check.
+
 ## Caveats
 
 - **`audit.py` is GitHub-only** (it reads issues/PRs via the `gh` CLI). On

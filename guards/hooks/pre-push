@@ -1,0 +1,17 @@
+#!/bin/sh
+# pre-push — the DesignDoc gate.
+#
+# Runs `guards/check_design.py --gate` over every document in docs/design/
+# (signatures + coherence + exits + frontier; NOT the design's state, which
+# expires once the code exists). A repo without docs/design/ has nothing to
+# check. Installed by the same core.hooksPath as the pre-commit gate
+# (`python3 guards/gate.py install <repo>`).
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+tool="$(dirname "$0")/../check_design.py"
+status=0
+for f in "$root"/docs/design/*.md "$root"/docs/design/*.json; do
+  [ -e "$f" ] || continue
+  echo "check-design: ${f#"$root"/}"
+  python3 "$tool" "$f" "$root" --gate || status=1
+done
+exit "$status"

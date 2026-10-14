@@ -60,6 +60,7 @@ structural check.
 | Skipped phase annotated on the ticket (I3) | General rules | script (`audit.py` skip_annotations, warning) + prompt |
 | System Invariants each with a test that can fail | phase 3 | prompt (executed by the mutation prover) |
 | Program-design signatures are contract (I2) | phase 5 | prompt (judgment: Spec axis) |
+| The DesignDoc passes its checks (signatures, coherence, four exits, frontier) | phase 5 + pre-push | script (`guards/check_design.py`, pre-push hook) + prompt (Spec axis judges `handled_at`) |
 | Main agent never edits code; fresh context per subagent; verbatim diffs | phase 6 | prompt |
 | Review axes read-only; mutation prover only in a scratch worktree | `REVIEW-CRITERIA.md` | prompt |
 | Evidence quote matches the diff verbatim (criterion 4) | `REVIEW-CRITERIA.md` | prompt |

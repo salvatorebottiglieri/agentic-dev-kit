@@ -3,6 +3,17 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `guards/check_design.py` + `guards/hooks/pre-push` — the DesignDoc gate: a
+  phase-5 design file (`docs/design/<feature>.md`, prose plus a `json design`
+  block) is checked for coherence, signatures against the real code, the four
+  exit kinds with their `handled_at`, and the external frontier's `residual`.
+  The pre-push hook runs the `--gate` subset (no state); the full mode runs at
+  the end of phase 5. Touches `phases/5-program-design.md`, `REVIEW-CRITERIA.md`
+  (Spec axis), `skills/program-design/SKILL.md` and `RATIONALE.md` D-023.
+
 ## [0.2.0] — 2026-10-14
 
 Pre-commit gate: workflow rules that asked the agent to *report* a fact
