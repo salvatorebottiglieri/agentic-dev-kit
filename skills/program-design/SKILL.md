@@ -122,6 +122,34 @@ function handleCreateResource(req: Request): Promise<Response>
 - If the change adds or modifies zero functions (config only, copy tweak),
   skip this section.
 
+#### Premises (B-025 voce 2, D-033)
+
+The design's premises are claims the design makes about the problem or
+the system — things that, if false, would invalidate the design but that
+are not directly provable from the call-stack tree or the type
+signatures. Examples: "user count grows linearly", "TLS termination at
+ingress", "the team's CI is green within 10 minutes".
+
+For each non-trivial design, list the premises and **falsify them**: each
+premise carries a `{claim, verdict, evidence}` triple. Verdicts are
+`falsified` (proved false by an existing artifact — a test, a benchmark,
+a spec section) or `confirmed` (the design asserts it; the evidence
+pointer cites where the confirmation lives). `untested` is a **violation**
+in `audit.py check_premises_falsified` — a design that did not falsify
+its own premises is a design that has not done its job. If a premise
+cannot be falsified, mark it `[non verificabile — opinione]` and document
+why in the evidence.
+
+```
+- **Premise**: user count grows linearly.
+  - verdict: falsified
+  - evidence: docs/specs/scale.md:42 (PoC: 10k users, flat latency)
+```
+
+Premises are not optional for designs that introduce behavior the
+team has not seen before. A refactor that only touches existing call
+graphs can skip them.
+
 ### 3. When to skip (classify the change)
 
 Program design runs **near-always**. Skip only when there is no *shape* to

@@ -111,6 +111,20 @@ Every finding must quote **evidence** (file + lines + verbatim excerpt from
 the diff) and carry a **severity** (`fatal` blocks, `advisory` does not).
 A finding without evidence is not accepted.
 
+**Report format — JSONL, not prose** (D-025, B-004): each reviewer
+writes one **JSONL file** (one row per finding, newline-delimited) to
+`reports/<feature>-<axis>.jsonl`. The schema is the one documented in
+`REVIEW-CRITERIA.md` § "Forma intermedia strutturata dei report" (fields:
+`criterion`, `item_id`, `verdict`, `severity`, `file`, `line`, `quote`,
+`commit`, `reviewer`, `claim`, `premise`). The markdown table the human
+reads is **rendered from the JSONL** at the end of the loop, not written
+first; the JSONL is the only source of truth. The orchestrator verifies
+the format mechanically (`audit.py check_brief_coverage`,
+`check_reviewer_evidence_verbatim`, `check_i6_zero_actionable`): every
+brief item must have a row, every code-claim `quote` must appear in
+the commit's diff, and `status=open + severity=fatal + verdict=actionable`
+blocks the fix loop.
+
 **Verify the reviewers like the code — brief coverage is mandatory.**
 Enumerate each reviewer's brief as a numbered list of items *before*
 spawning it (Standards: each standards file and each ADR the ticket cites;
@@ -214,7 +228,10 @@ If any review finds actionable issues (or an unresolved tension):
    **step 2b** for any target whose mutant was green.
 5. Exit the loop only when all reviews return **zero actionable findings**,
    every mutant in the matrix is red, and every tension is resolved
-   (escalated or resolved by weight).
+   (escalated or resolved by weight). I6 (B-004 voce 10): a finding
+   with `severity=fatal + verdict=actionable` must have `status=resolved`
+   before exit; `status=open` blocks the loop. The check is mechanical
+   (`audit.py check_i6_zero_actionable`), not judgment.
 
 The only exception to full delegation: purely mechanical findings
 (whitespace, typos, comments) you may fix yourself. Anything behavioural,

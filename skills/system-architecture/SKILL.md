@@ -162,6 +162,7 @@ verified**.
 - Derive them from the other artifacts: state machine → transition invariants; data model → structural invariants; endpoint contracts → response invariants; domain laws already in ADR/CONTEXT.md → codify them.
 - **Anti-vacuity**: an invariant whose test cannot fail is an opinion. If no test can pin it, mark it `[non verificabile — opinione]` instead of pretending.
 - Only invariants that can be checked mechanically or by a deterministic test belong here — invariants that need LLM judgment belong in `## Testing Decisions`.
+- **`**Verification**:` line is mandatory for every invariant** (B-025 voce 4, D-035): each row in the invariants table carries a `Verified in` column whose value is a **back-ticked script or function** that actually pins the invariant — `audit.py check_*`, `tests/test_*.py::*`, `path/to/script.py`, never a bare "judgment" or a description. `audit.py check_invariant_verification_exists` rejects the design if any invariant lacks this line, cites a non-existent function, or says only "judgment". This is the caposaldo (D-024) applied to the system-invariants section: a law without a verifiable check is an opinion.
 
 #### Data model
 
