@@ -65,12 +65,20 @@ project instructions file (`CLAUDE.md`, `AGENTS.md`, or your agent's
 equivalent). Then follow its phases. A typo fix, a one-line config change, or a
 question about code does not need the pipeline.
 
-## Pre-commit gate
+## Gates: pre-commit + pre-push
 
-A git pre-commit hook that computes facts the review needs and stages them
-into the commit itself, so they do not depend on what the agent chooses to
-report. Requires Python >= 3.11 (`tomllib`). Install it into a repository's
-top level (repo-local `core.hooksPath`, no global config touched; idempotent):
+`install.sh --gate <repo>` points the repository-local `core.hooksPath` at the
+kit's `guards/hooks`, which ships two hooks. No global config is touched and
+the install is idempotent. Both require Python >= 3.11 (`tomllib`).
+
+- **pre-commit** — computes facts the review needs and stages them into the
+  commit itself, so they do not depend on what the agent chooses to report.
+- **pre-push** — runs the DesignDoc gate over `docs/design/*.md` at push time
+  (signatures against the real code, coherence, the four exit kinds, the
+  external frontier). A repository without `docs/design/` has nothing to
+  check and the hook exits 0.
+
+Install both into a repository's top level:
 
 ```bash
 ~/agentic-dev-kit/install.sh --gate /path/to/repo
@@ -80,6 +88,8 @@ If `core.hooksPath` is already set to something else (e.g. husky's `.husky`),
 the install refuses and changes nothing: unset it first if the gate should
 replace it. Hooks in `.git/hooks/` stop running once `core.hooksPath` is set;
 the install names any it finds.
+
+### Pre-commit gate
 
 Configure it in that repository's `.workflow/gate.toml`:
 
@@ -135,7 +145,7 @@ but the main index keeps the previous report afterwards (`git status` shows
 Known bypasses: `git commit --no-verify`, changing `core.hooksPath`, editing
 the gate. The `final` mode detects them after the fact.
 
-### Final mode
+#### Final mode
 
 Run it on the final working tree — by a person before review, in CI, or by a
 bench outside git — after the last commit of a session:
@@ -172,6 +182,42 @@ line per problem on stderr as `gate: final: <problem>`, in this order:
 
 Exit 0, with no output, only when the committed report is present and current
 and the hook intact; 1 otherwise; 2 on bad arguments.
+
+### DesignDoc gate (pre-push)
+
+A repository that keeps its phase-5 designs in `docs/design/*.md` gets a
+second gate. The design file is prose plus a fenced `json design` block with
+the machine part — call stack, file tree, signatures, data flow, and one
+contract per call with its exits. `guards/check_design.py` checks it
+(stdlib only, no browser):
+
+```bash
+python3 guards/check_design.py docs/design/<feature>.md .          # full: state included
+python3 guards/check_design.py docs/design/<feature>.md . --gate   # pre-push/CI: no state
+```
+
+- **signatures** — every function the document declares is compared with the
+  real code: `compatible` / `shortened` / `proposed` / `new`, and
+  `incompatible` (a required parameter omitted) exits non-zero.
+- **coherence** — contract sites, nodes and edges may not contradict each
+  other; signatures live in one place.
+- **exits** — all four kinds (`returns`, `absent`, `raises`, `effect`) must be
+  declared, and every dispatchable one (`returns`, `absent`, `raises`) needs a
+  real `handled_at`. A contract without `raises` is silent, which is
+  indistinguishable from a forgotten exit.
+- **frontier** — a contract that calls outside the repo (free-text `call`, or a
+  ghost node) must declare `residual`: what happens to the exits it did not
+  enumerate. A library's exception set is not readable with `ast`, so the check
+  verifies the declared residual, not the library.
+- **state** — `add` / `mod` / `keep` is verified against the code. This one is
+  **not** checked by `--gate`: it is true only while the code does not exist,
+  so at pre-push it would be stale by construction. The full mode runs at the
+  end of phase 5.
+
+`guards/hooks/pre-push` runs `--gate` over every `docs/design/*.md` (and
+`*.json`) in the repository at push time; it is installed by the same
+`core.hooksPath` as the pre-commit gate (`./install.sh --gate <repo>`). A
+repository without `docs/design/` has nothing to check.
 
 ## Caveats
 

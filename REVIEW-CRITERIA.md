@@ -75,7 +75,14 @@ other access to it):
   gap, and "no coverage" said of a blind test is a false claim about a real
   problem. The verdict is produced by the mutation prover, never by reading
   the diff. Dependency: (d) consumes the spec's invariants section and the
-  prover's mutation matrix.
+  prover's mutation matrix; (e) design-contract conformance — per
+  `contracts[]` of `docs/design/<feature>.md`: the gate proves the declaration
+  is present and the signatures hold (`guards/check_design.py --gate` exits
+  0); this criterion judges its **content** — is each exit's `handled_at` the
+  right place, and is an external call's `residual` the right policy? →
+  `advisory` on a declared-but-wrong place; a signature divergence is already
+  `--gate` exit ≠ 0 → `fatal`. Dependency: (e) consumes the design file and
+  the gate's result.
 - **ponytail axis** — the delete-list (`skill://ponytail-review`):
   `delete` / `stdlib` / `native` / `yagni` / `shrink`, with a net
   lines-removable count. Every finding quotes the hunk verbatim →

@@ -170,7 +170,54 @@ can still skip, but only if it changes no signature and no control flow.
 When in doubt, do it: it costs minutes and prevents hours of rework.
 
 
-### 4. Append to the ticket
+### 4. Write the design document on the branch
+
+The design lives in **`docs/design/<feature>.md`**, committed on the branch —
+not only in the ticket. It is the prose above plus a fenced `json design` block
+that is the machine part:
+
+```json design
+{
+  "feature": "…",
+  "call_stack": { "name": "…", "children": [ { "name": "…", "note": "…", "children": [] } ] },
+  "file_tree": [ { "kind": "add", "path": "src/…", "note": "…" } ],
+  "signatures": [ { "module": "src/…py", "language": "python", "code": "def f(a, b=1) -> T: …" } ],
+  "data_flow": {
+    "nodes": [ { "id": "mod.f", "module": "src/mod.py", "kind": "add" } ],
+    "edges": [ { "from": "mod.f", "to": "other.g" } ]
+  },
+  "contracts": [
+    {
+      "site": "mod.f",
+      "callee": "other.g",
+      "exits": [
+        { "kind": "returns", "type": "T", "handled_at": "src/mod.py:42" },
+        { "kind": "absent", "type": "None", "handled_at": "why it cannot happen" },
+        { "kind": "raises", "type": "ValueError", "handled_at": "src/mod.py:50" },
+        { "kind": "effect", "type": "none", "handled_at": null }
+      ]
+    }
+  ]
+}
+```
+
+Then run the checker in **full** mode; it must exit 0 before you publish:
+
+```bash
+python3 guards/check_design.py docs/design/<feature>.md .
+```
+
+- All four exit kinds are mandatory: a contract without `raises` is silent, not
+  a claim that nothing raises. Every dispatchable exit (`returns`, `absent`,
+  `raises`) needs a real `handled_at`; `effect` may be `null`.
+- A contract that calls outside the repo (free-text `call`, or a ghost node
+  whose module is not a repo file) declares `residual`: what happens to the
+  exits it did not enumerate.
+- At pre-push and in CI the same tool runs `--gate` (signatures + coherence +
+  exits + frontier). It does **not** check the design's `state`
+  (`add`/`mod`/`keep`): that is true only while the code does not exist.
+
+### 5. Append to the ticket
 
 Append a `## Program Design` section to the issue body on the tracker.
 
@@ -212,7 +259,7 @@ _CLASSIFY: <change type>_
 
 Omit sections that are empty — don't produce "N/A" placeholders.
 
-### 5. Stop for review
+### 6. Stop for review
 
 Do **not** proceed to implementation. Report what was produced and ask:
 
@@ -228,7 +275,7 @@ If the user corrects anything, incorporate the fix and re-append the section
 
 | Skill | Effect |
 |---|---|
-| **implement-loop** | Passes the full ticket body to the implement subagent. If `## Program Design` is present, the signatures there are contract — the subagent implements exactly those interfaces. |
+| **implement-loop** | Passes the full ticket body and the design file `docs/design/<feature>.md` to the implement subagent. The signatures there are contract — the subagent implements exactly those interfaces — and the declared `exits` are its test list. |
 | **code-review** | The spec-axis reviewer compares the diff against the ticket body, now including the signatures. _"Signature says `createResource(...)`, but the implementation uses `save()` and returns `any`."_ |
 | `codebase-design` | Provides vocabulary (deep module, seam). Program design is the *concrete* application: "the seam is this signature." |
 | `domain-modeling` | Program design uses `CONTEXT.md` vocabulary. If a term is ambiguous, call `domain-modeling`. |

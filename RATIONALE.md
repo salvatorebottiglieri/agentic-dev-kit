@@ -786,6 +786,45 @@ TARGET.md records the evolution; this document records the reasons.
   `README.md` ("Pre-commit gate").
 - **Source.** Issue #2 of this repository.
 
+## D-023 — Phase 5's design is a verifiable file, and its exits are the test list (2026-10-14)
+
+- **Context.** Phase 5 produced a `## Program Design` section on the ticket:
+  call stack, file tree, signatures. A document can be internally coherent and
+  **false about the world** — a declared signature the code does not keep, a
+  node declared "new" that already exists — and no check on its form sees that
+  (B-023, "case B"). And "do not write only the happy path" stayed an
+  intention: a contract without `raises` does not state that the callee does
+  not raise, it is silent, and silence is indistinguishable from a forgotten
+  exit.
+- **Decision.** The design is `docs/design/<feature>.md` **on the branch**:
+  prose plus a fenced `json design` block with the call stack, file tree,
+  signatures, data flow, and one contract per call with its exits.
+  `guards/check_design.py` (promoted from the
+  `2026-10-interactive-program-design` prototype) checks coherence, signatures
+  against the real code, state, exits (all four kinds
+  `returns`/`absent`/`raises`/`effect` present, every dispatchable exit with a
+  `handled_at`) and the frontier (a contract calling outside the repo declares
+  its `residual`). At the end of phase 5 it runs in **full** mode (state
+  included) and must exit 0 before publishing; at pre-push and in CI it runs
+  `--gate` (signatures + coherence + exits + frontier, **not** the state).
+- **Rationale.**
+  1. **"Only the happy path" becomes structure, not intention**: omitting a
+     `raises` is not an invisible oversight, it is a non-zero exit.
+  2. **The design's state has a window**: "new / modified / already present" is
+     true only while the code does not exist; at pre-push it would be stale by
+     construction, and a gate that always fails is one people learn to bypass.
+     That is why `--gate` does not check it.
+  3. **The frontier is declared, not guessed**: the set of exceptions a library
+     raises is not readable with `ast`; the check verifies the declared
+     residual, it does not pretend to know the library.
+  4. **The exits are the test list**: the implementer receives the contracts,
+     not the checker; the prover can turn every exit into a mutant.
+- **Rule location.** `phases/5-program-design.md`; `WORKFLOW.md` ("Where each
+  rule is enforced" table); `REVIEW-CRITERIA.md` (Spec axis, design-contract
+  conformance); `skills/program-design/SKILL.md`; `guards/check_design.py`.
+- **Source.** Experiment `2026-10-interactive-program-design` (B-023, prototype
+  and 10 mutation tests); session 2026-10-14.
+
 ---
 
 ## Not a rationale yet (candidates)

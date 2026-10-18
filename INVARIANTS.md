@@ -30,7 +30,7 @@ tracker + example-project stress-campaign session (#115). Evidence per invariant
 
 - **Law**: if the ticket has a `## Program Design` section, the implementation follows the signatures; every deviation is legal only if the reason is documented on the ticket **or** the PR, and mentioned in the handoff.
 - **Negation** → check: a handoff/PR that declares a deviation without documenting its reason on the ticket or PR.
-- **Verification**: judgment (Spec axis of the review) + manual handoff audit.
+- **Verification**: judgment (Spec axis of the review) + `guards/check_design.py --gate` (pre-push hook, B-023) + manual handoff audit.
 - **Evidence**: **2 real deviations** in different sessions. #212: documented in an issue comment (✓). **#191: the handoff claimed "documented on #191" but the annotation is only on PR #192, not the issue (✗)** — the clause accepts both, but the inconsistency was the real violation: the documentation existed, its *location* was unpredictable.
 - **Clause**: the deviation must be annotated on the issue (comment) **or** in the PR body; the handoff must say *where*. Never just "documented" without a location.
 
@@ -62,7 +62,7 @@ tracker + example-project stress-campaign session (#115). Evidence per invariant
 
 - **Law**: the implement-loop ends only with zero actionable findings on both review axes.
 - **Negation** → check: a handoff/PR declaring residual actionable findings as "accepted".
-- **Verification**: judgment (the review is already a gate) + handoff audit.
+- **Verification**: judgment (the review is already a gate) + `audit.py check_i6_zero_actionable` (D-028) + handoff audit.
 - **Evidence**: "final: zero" in every documented loop (quota-gate, auth, status, search). **No violation**.
 - **Clause**: findings resolved in re-review count; non-blocking follow-ups must be tracked (see I9).
 

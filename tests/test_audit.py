@@ -14,22 +14,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import audit
 from audit import (
+    check_audit_in_handoff,
+    check_brief_coverage,
     check_ci_before_merge,
     check_configured_gates_run_in_ci,
     check_followups_tracked,
     check_handoffs_quote_commands,
+    check_i6_zero_actionable,
+    check_invariant_verification_exists,
+    check_phase2_decision_stated,
     check_pr_links_issue,
+    check_premises_falsified,
+    check_rationale_entry_in_pr,
     check_recent_handoff,
+    check_reviewer_evidence_verbatim,
+    check_session_claim_present,
     check_skip_annotations,
+    check_worktrees_cleaned,
     gather_prs,
 )
 
-# Real commit from Example/example-pipeline, where the fallback
+# Real commit from BranchToast/branchtoast-news-pipeline, where the fallback
 # was needed (a fine-grained PAT without check-run access).
 SHA = "0887aaea7ae21185fee524a59facc500e43465f3"
 
 #: I9 is scoped per project: only handoffs declaring this repo are read.
-REPO = "Example/example-pipeline"
+REPO = "BranchToast/branchtoast-news-pipeline"
 
 
 def _handoff(text: str, name: str = "h.md", repo: str | None = REPO) -> dict:
@@ -254,20 +264,20 @@ def test_followups_tracked_section_scope_ends_at_the_next_heading():
 def test_handoff_repo_reads_the_declared_field():
     """The accepted forms of the field, and — just as important — a heading
     that mentions the repo without declaring it (which parses to None)."""
-    assert audit._handoff_repo("- **Repo**: Example/x\n") == "Example/x"
+    assert audit._handoff_repo("- **Repo**: BranchToast/x\n") == "BranchToast/x"
     assert audit._handoff_repo("Repo: owner/name\n") == "owner/name"
     assert audit._handoff_repo("**repo:** owner/name (audited)\n") == "owner/name"
-    assert audit._handoff_repo("## Repo state\nExample/example-x\n") is None
+    assert audit._handoff_repo("## Repo state\nBranchToast/branchtoast-x\n") is None
 
 
 def test_followups_tracked_ignores_handoffs_of_another_repo():
     """The third false-positive class (2026-09-19): the corpus of handoffs is
-    shared by every project, the tracker is not. The example-service handoff
+    shared by every project, the tracker is not. The domus_vault handoff
     citing its own #319 resolves at home and must not be judged here."""
     handoffs = [_handoff(
         "Closes #316 #317 #318 #319\n- Advisory: legacy note, already tracked\n",
         name="handoff-diario-mockup-fidelity-20260917.md",
-        repo="Example/example-service",
+        repo="salvatorebottiglieri/domus_vault",
     )]
     assert check_followups_tracked(handoffs, {270}, REPO) == []
 
@@ -296,7 +306,7 @@ def test_followups_tracked_skips_a_handoff_declaring_no_repo():
 def test_followups_tracked_matches_the_repo_slug_case_insensitively():
     """GitHub slugs are case-insensitive, so the field comparison is too."""
     handoffs = [_handoff("Advisory: follow-up to open (#99999)\n",
-                         repo="example/example-pipeline")]
+                         repo="branchtoast/BRANCHTOAST-NEWS-PIPELINE")]
     violations = check_followups_tracked(handoffs, {270}, REPO)
     assert violations and "#99999" in violations[0]
 
@@ -433,5 +443,400 @@ def test_gather_prs_prefers_the_readable_rollup(monkeypatch):
         {"name": "CI", "conclusion": "SUCCESS"}
     ]
     assert not any(c[:2] == ["run", "list"] for c in calls)
+
+
+# ── B-025 voce 8: reviewer evidence verbatim ──────────────────────────
+
+
+def test_reviewer_evidence_verbatim_compliant():
+    """A code claim with a quote that appears in the diff passes."""
+    diff = "+foo()\n-bar()\n"
+    reports = [{
+        "criterion": "4", "item_id": "ADR-0013",
+        "verdict": "fail", "severity": "fatal",
+        "claim": "code", "quote": "foo()", "commit": "abc1234",
+        "reviewer": "standards",
+    }]
+    pr_diffs = {"abc1234": diff}
+    assert check_reviewer_evidence_verbatim(reports, pr_diffs) == []
+
+
+def test_reviewer_evidence_verbatim_detects_quote_not_in_diff():
+    """A quote that does not appear verbatim in the diff is a violation
+    (hallucination or stale reference)."""
+    diff = "+foo()\n-bar()\n"
+    reports = [{
+        "criterion": "4", "item_id": "ADR-0013",
+        "verdict": "fail", "severity": "fatal",
+        "claim": "code", "quote": "qux()", "commit": "abc1234",
+        "reviewer": "standards",
+    }]
+    pr_diffs = {"abc1234": diff}
+    violations = check_reviewer_evidence_verbatim(reports, pr_diffs)
+    assert any("ADR-0013" in v and "abc1234" in v for v in violations)
+
+
+def test_reviewer_evidence_verbatim_detects_missing_quote_for_code_claim():
+    """A code claim without a quote or commit is unverifiable = violation."""
+    reports = [{
+        "criterion": "4", "item_id": "AC-2",
+        "verdict": "fail", "severity": "fatal",
+        "claim": "code",  # no quote, no commit
+        "reviewer": "spec",
+    }]
+    violations = check_reviewer_evidence_verbatim(reports, {})
+    assert any("AC-2" in v and "missing" in v for v in violations)
+
+
+def test_reviewer_evidence_verbatim_detects_commit_not_in_pr_diffs():
+    """A commit not present in pr_diffs cannot be verified = violation."""
+    reports = [{
+        "criterion": "4", "item_id": "AC-2",
+        "verdict": "fail", "severity": "fatal",
+        "claim": "code", "quote": "foo()", "commit": "deadbeef",
+        "reviewer": "spec",
+    }]
+    violations = check_reviewer_evidence_verbatim(reports, {})
+    assert any("deadbeef" in v for v in violations)
+
+
+def test_reviewer_evidence_verbatim_skips_coverage_claim():
+    """A coverage claim has no quote (the mutation matrix is the proof)."""
+    reports = [{
+        "criterion": "4b", "item_id": "I-impl-line-12",
+        "verdict": "pinned", "severity": "fatal",
+        "claim": "coverage",
+        "commit": "abc1234",  # no quote
+        "reviewer": "mutation",
+    }]
+    assert check_reviewer_evidence_verbatim(reports, {}) == []
+
+
+# ── B-025 voce 9: brief coverage ─────────────────────────────────────
+
+
+def test_brief_coverage_compliant():
+    """Every brief item has at least one row in the reports."""
+    reports = [
+        {"criterion": "1", "item_id": "ADR-0013", "verdict": "pass",
+         "severity": "advisory", "reviewer": "standards"},
+        {"criterion": "1", "item_id": "AC-1", "verdict": "pass",
+         "severity": "advisory", "reviewer": "spec"},
+        {"criterion": "1", "item_id": "AC-2", "verdict": "n/a — out of scope",
+         "severity": "advisory", "reviewer": "spec"},
+    ]
+    brief = ["ADR-0013", "AC-1", "AC-2"]
+    assert check_brief_coverage(reports, brief) == []
+
+
+def test_brief_coverage_detects_missing_item():
+    """An item in the brief without a row in any report is a violation."""
+    reports = [
+        {"criterion": "1", "item_id": "ADR-0013", "verdict": "pass",
+         "severity": "advisory", "reviewer": "standards"},
+        # AC-1 missing — reviewer never answered it
+    ]
+    brief = ["ADR-0013", "AC-1", "AC-2"]
+    violations = check_brief_coverage(reports, brief)
+    assert any("AC-1" in v for v in violations), violations
+    assert any("AC-2" in v for v in violations), violations
+    assert not any("ADR-0013" in v for v in violations), violations
+
+
+def test_brief_coverage_detects_fully_silent_reviewer():
+    """If the reviewer emits no rows at all, every brief item is missing."""
+    violations = check_brief_coverage([], ["ADR-0013", "AC-1", "AC-2"])
+    assert len(violations) == 3
+
+
+# ── B-025 voce 10: I6 zero actionable findings ──────────────────────
+
+
+def test_i6_zero_actionable_compliant():
+    """No open fatal actionable findings: the fix loop can exit."""
+    reports = [
+        {"criterion": "1", "item_id": "AC-1", "verdict": "pass",
+         "severity": "advisory", "reviewer": "spec", "status": "open"},
+        {"criterion": "1", "item_id": "AC-2", "verdict": "fail",
+         "severity": "fatal", "reviewer": "spec", "status": "resolved"},
+        {"criterion": "1", "item_id": "AC-3", "verdict": "n/a",
+         "severity": "advisory", "reviewer": "spec", "status": "open"},
+    ]
+    assert check_i6_zero_actionable(reports) == []
+
+
+def test_i6_zero_actionable_detects_open_fatal():
+    """An open fatal actionable finding blocks the loop exit (I6)."""
+    reports = [
+        {"criterion": "1", "item_id": "AC-1", "verdict": "actionable",
+         "severity": "fatal", "reviewer": "spec", "status": "open"},
+    ]
+    violations = check_i6_zero_actionable(reports)
+    assert any("AC-1" in v and "actionable" in v for v in violations), violations
+
+
+def test_i6_zero_actionable_closed_finding_passes():
+    """A fatal actionable finding with status=resolved is closed."""
+    reports = [
+        {"criterion": "1", "item_id": "AC-1", "verdict": "actionable",
+         "severity": "fatal", "reviewer": "spec", "status": "resolved"},
+    ]
+    assert check_i6_zero_actionable(reports) == []
+
+
+def test_i6_zero_actionable_advisory_never_blocks():
+    """Advisory findings ride along in the handoff, not in I6."""
+    reports = [
+        {"criterion": "1", "item_id": "AC-1", "verdict": "actionable",
+         "severity": "advisory", "reviewer": "ponytail", "status": "open"},
+    ]
+    assert check_i6_zero_actionable(reports) == []
+
+
+# ── B-025 voce 2: premises falsified ──────────────────────────────
+
+
+def test_premises_falsified_compliant():
+    """A premise with verdict=falsified + evidence passes."""
+    reports = [
+        {"criterion": "1", "item_id": "P-1", "verdict": "pass",
+         "severity": "advisory", "reviewer": "spec",
+         "premise": {"claim": "user count grows linearly",
+                     "verdict": "falsified",
+                     "evidence": "spec.md:42 (PoC: 10k users, flat latency)"}},
+    ]
+    assert check_premises_falsified(reports) == []
+
+
+def test_premises_falsified_detects_untested():
+    """A premise with verdict=untested is a violation: design did not
+    falsify its own claim."""
+    reports = [
+        {"criterion": "1", "item_id": "P-1", "verdict": "pass",
+         "severity": "advisory", "reviewer": "spec",
+         "premise": {"claim": "user count grows linearly",
+                     "verdict": "untested"}},
+    ]
+    violations = check_premises_falsified(reports)
+    assert any("P-1" in v and "untested" in v for v in violations), violations
+
+
+def test_premises_falsified_detects_confirmed_without_evidence():
+    """A premise claimed confirmed without an evidence pointer is unbacked."""
+    reports = [
+        {"criterion": "1", "item_id": "P-1", "verdict": "pass",
+         "severity": "advisory", "reviewer": "spec",
+         "premise": {"claim": "system invariant I4 holds",
+                     "verdict": "confirmed"}},
+    ]
+    violations = check_premises_falsified(reports)
+    assert any("P-1" in v and "evidence" in v for v in violations), violations
+
+
+def test_premises_falsified_skips_reports_without_premise():
+    """Reports without a premise field are not subject to this check."""
+    reports = [
+        {"criterion": "1", "item_id": "AC-1", "verdict": "pass",
+         "severity": "advisory", "reviewer": "spec"},
+    ]
+    assert check_premises_falsified(reports) == []
+
+
+# ── B-025 voce 3: phase-2 decision stated ───────────────────────────
+
+
+def test_phase2_decision_stated_compliant_done():
+    """A UI handoff with 'Phase 2: done' passes."""
+    handoffs = [{
+        "name": "h-ui.md",
+        "text": "UI changes: rewrote the modal. Phase 2: done.\n",
+    }]
+    assert check_phase2_decision_stated(handoffs) == []
+
+
+def test_phase2_decision_stated_compliant_skipped():
+    """A UI handoff with 'Phase 2: skipped — API-only' passes."""
+    handoffs = [{
+        "name": "h-ui.md",
+        "text": "UI changes: header bar refactor. "
+                "Phase 2: skipped — header-only, no flows changed.\n",
+    }]
+    assert check_phase2_decision_stated(handoffs) == []
+
+
+def test_phase2_decision_stated_detects_ui_without_decision():
+    """A handoff with no phase-2 decision is a violation, even when the
+    session did not touch UI ('Phase 2: n/a' is the explicit no-UI form)."""
+    handoffs = [{
+        "name": "h-ui.md",
+        "text": "Touched the UI but forgot to say anything about phase 2.\n",
+    }]
+    violations = check_phase2_decision_stated(handoffs)
+    assert any("h-ui.md" in v for v in violations), violations
+
+
+def test_phase2_decision_stated_skips_non_ui_handoffs():
+    """Non-UI handoffs that explicitly declare 'Phase 2: n/a' pass."""
+    handoffs = [{
+        "name": "h-backend.md",
+        "text": "Backend refactor, no UI changes.\n"
+                "Phase 2: n/a — backend only.\n",
+    }]
+    assert check_phase2_decision_stated(handoffs) == []
+
+
+# ── B-025 voce 4: invariant verification exists ──────────────────
+
+
+def test_invariant_verification_exists_compliant():
+    """INVARIANTS.md is in the expected form: every invariant has a
+    verification line citing a real `audit.py check_*` function."""
+    violations = check_invariant_verification_exists()
+    assert violations == [], violations
+
+
+def test_invariant_verification_detects_missing_function(tmp_path, monkeypatch):
+    """If INVARIANTS.md cites a function that doesn't exist in audit.py,
+    the check detects it (anti-vacuity)."""
+    # Simulate a stale reference: rewrite audit.py to drop the function
+    monkeypatch.setattr(audit, "WORKFLOW_DIR", tmp_path)
+    inv = tmp_path / "INVARIANTS.md"
+    inv.write_text(
+        "## I99 — test invariant\n\n- **Verification**: `audit.py check_ghost_func`\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "audit.py").write_text("# empty\n", encoding="utf-8")
+    (tmp_path / "guards").mkdir()
+    (tmp_path / "guards" / "x.py").write_text("", encoding="utf-8")
+    violations = check_invariant_verification_exists()
+    assert any("I99" in v and "check_ghost_func" in v for v in violations), violations
+
+
+# ── B-025 voce 12: session claim present ─────────────────────────────
+
+
+def test_session_claim_present_compliant_when_claimed_with_file():
+    """A handoff that said it claimed and the claim file exists passes."""
+    handoffs = [{
+        "name": "h.md",
+        "text": "- **Repo**: owner/foo\n\nSession claimed a primary tree.\n",
+    }]
+    assert check_session_claim_present(handoffs, {"owner/foo"}) == []
+
+
+def test_session_claim_present_detects_missing_claim_file():
+    """A handoff that said it claimed but no claim file exists is a violation."""
+    handoffs = [{
+        "name": "h.md",
+        "text": "- **Repo**: owner/foo\n\nSession claimed a primary tree.\n",
+    }]
+    violations = check_session_claim_present(handoffs, set())
+    assert any("h.md" in v and "owner/foo" in v for v in violations), violations
+
+
+def test_session_claim_present_skips_handoff_that_did_not_claim():
+    """A handoff that did not claim a primary tree is not subject to the check."""
+    handoffs = [{
+        "name": "h.md",
+        "text": "No tree claim, just a normal session.\n",
+    }]
+    assert check_session_claim_present(handoffs, set()) == []
+
+
+# ── B-025 voce 13: worktrees cleaned ────────────────────────────────
+
+
+def test_worktrees_cleaned_compliant_no_extras():
+    """A single (principal) worktree is fine: nothing to clean."""
+    worktrees = [{"path": "/repo", "head": "abc", "branch": "refs/heads/master"}]
+    assert check_worktrees_cleaned(worktrees) == []
+
+
+def test_worktrees_cleaned_detects_extras():
+    """A non-principal worktree triggers a violation (must be cleaned
+    or its retention documented in the handoff)."""
+    worktrees = [
+        {"path": "/repo", "branch": "refs/heads/master"},
+        {"path": "/repo-feature", "branch": "refs/heads/feature"},
+    ]
+    violations = check_worktrees_cleaned(worktrees)
+    assert any("feature" in v and "/repo-feature" in v for v in violations), violations
+
+
+def test_worktrees_cleaned_flags_locked_worktree_critical():
+    """A locked worktree is critical — it cannot be removed automatically."""
+    worktrees = [
+        {"path": "/repo", "branch": "refs/heads/master"},
+        {"path": "/repo-locked", "branch": "refs/heads/exp", "locked": True},
+    ]
+    violations = check_worktrees_cleaned(worktrees)
+    assert any("CRITICAL" in v and "/repo-locked" in v for v in violations), violations
+
+
+# ── B-025 voce 14: rationale entry in PR ────────────────────────────
+
+
+def test_rationale_entry_in_pr_compliant():
+    """A PR that touches phases/*.md AND RATIONALE.md passes."""
+    prs = [{
+        "number": 1,
+        "body": "Add D-024 entry in RATIONALE.md",
+        "files": [{"path": "phases/5-program-design.md"}, {"path": "RATIONALE.md"}],
+    }]
+    assert check_rationale_entry_in_pr(prs) == []
+
+
+def test_rationale_entry_in_pr_detects_orphan_change():
+    """A PR that touches phases/*.md but not RATIONALE.md is a violation."""
+    prs = [{
+        "number": 2,
+        "body": "Tweak phase 5 wording",
+        "files": [{"path": "phases/5-program-design.md"}],
+    }]
+    violations = check_rationale_entry_in_pr(prs)
+    assert any("#2" in v and "orphan" in v for v in violations), violations
+
+
+def test_rationale_entry_in_pr_skips_unrelated_prs():
+    """A PR that doesn't touch the rule registry is not subject to the check."""
+    prs = [{
+        "number": 3,
+        "body": "Refactor the audit module",
+        "files": [{"path": "audit.py"}],
+    }]
+    assert check_rationale_entry_in_pr(prs) == []
+
+
+# ── B-025 voce 15: audit.py --repo cited in latest handoff ─────────
+
+
+def test_audit_in_handoff_compliant():
+    """The latest handoff cites the audit.py --repo command."""
+    handoffs = [{
+        "name": "h-20261017.md",
+        "text": "## Verification\n\n`python ~/agentic-workflow/audit.py "
+                "--repo owner/foo`\n",
+    }]
+    assert check_audit_in_handoff(handoffs) == []
+
+
+def test_audit_in_handoff_detects_missing_command():
+    """The latest handoff has Verification but no audit.py --repo citation."""
+    handoffs = [{
+        "name": "h-20261017.md",
+        "text": "## Verification\n\nManual review by the committente.\n",
+    }]
+    violations = check_audit_in_handoff(handoffs)
+    assert any("h-20261017.md" in v for v in violations), violations
+
+
+def test_audit_in_handoff_picks_latest_by_name():
+    """When multiple handoffs are given, the one with the lexicographically
+    largest name is treated as the latest."""
+    handoffs = [
+        {"name": "h-20261016.md", "text": "No audit cite here.\n"},
+        {"name": "h-20261017.md", "text": "`audit.py --repo owner/foo`\n"},
+    ]
+    assert check_audit_in_handoff(handoffs) == []
 
 

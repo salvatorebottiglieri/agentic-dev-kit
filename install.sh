@@ -9,8 +9,9 @@
 # replaced after you confirm. The docs and audit.py stay in this clone.
 #
 #     ./install.sh --gate <repo>
-# installs the pre-commit gate into <repo> instead (repo-local core.hooksPath
-# pointing at guards/hooks; see README "Pre-commit gate"). No skill is linked.
+# installs the gates (pre-commit + pre-push) into <repo> instead (repo-local
+# core.hooksPath pointing at guards/hooks; see README "Gates: pre-commit +
+# pre-push"). No skill is linked.
 set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

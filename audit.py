@@ -164,7 +164,7 @@ QUOTED_COMMAND_RE = re.compile(
 
 #: The repo a handoff declares it concerns, which is what scopes I9 to a
 #: project (see ``check_followups_tracked``). Canonical form:
-#: ``- **Repo**: Example/a-data-pipeline``. Bullet, numbering,
+#: ``- **Repo**: BranchToast/branchtoast-news-pipeline``. Bullet, numbering,
 #: bold label and label case are tolerated — a handoff is a prose document —
 #: while the slug is taken literally. Prefer the canonical form when writing.
 HANDOFF_REPO_RE = re.compile(
@@ -258,6 +258,359 @@ def check_followups_tracked(
                     f"[I9] {name}:{lineno} names a follow-up with no "
                     f"tracker reference: {line.strip()[:80]}"
                 )
+    return violations
+
+
+def check_invariant_verification_exists() -> list[str]:
+    """B-025 voce 4 — every invariant in `INVARIANTS.md` has a
+    verification that can fail. ``Judgment`` alone is no longer enough
+    (D-024 trigger): an invariant's verification is either a back-ticked
+    script/function that exists in `audit.py` / `guards/`, or a tool
+    reference alongside a judgment. The check parses `INVARIANTS.md` and
+    asserts the form.
+    """
+    text = (WORKFLOW_DIR / "INVARIANTS.md").read_text(encoding="utf-8")
+    audit_text = (WORKFLOW_DIR / "audit.py").read_text(encoding="utf-8")
+    guards_text = ""
+    guards_dir = WORKFLOW_DIR / "guards"
+    if guards_dir.exists():
+        guards_text = "\n".join(
+            p.read_text(encoding="utf-8") for p in guards_dir.glob("*.py")
+        )
+    violations = []
+    for m in re.finditer(r"^## (I\d+) — ", text, re.MULTILINE):
+        inv_id = m.group(1)
+        block_start = m.start()
+        rest = text[block_start + 1:]
+        next_match = re.search(r"^## ", rest, re.MULTILINE)
+        block_end = block_start + 1 + next_match.start() if next_match else len(text)
+        block = text[block_start:block_end]
+        if "REMOVED" in block[:200]:
+            continue
+        ver_match = re.search(r"\*\*Verification\*\*:\s*([^\n]+)", block)
+        if not ver_match or not ver_match.group(1).strip():
+            violations.append(
+                f"[B-025/4] {inv_id} has no **Verification** line"
+            )
+            continue
+        ver = ver_match.group(1)
+        ck = re.search(r"`audit\.py\s+(check_\w+)`", ver)
+        if ck:
+            func_name = ck.group(1)
+            if f"def {func_name}(" not in audit_text:
+                violations.append(
+                    f"[B-025/4] {inv_id} Verification cites "
+                    f"`audit.py {func_name}` but the function is missing"
+                )
+            continue
+        if "judgment" in ver.lower() and "audit.py" not in ver and "guards/" not in ver:
+            violations.append(
+                f"[B-025/4] {inv_id} Verification is judgment-only — "
+                f"D-024 requires a script/tool reference alongside"
+            )
+    return violations
+
+
+def check_premises_falsified(reports: list[dict]) -> list[str]:
+    """B-025 voce 2 — premises in a design must be falsified with
+    evidence. Each finding (or design row) can carry a ``premise`` field
+    of shape ``{claim, verdict, evidence}``. ``verdict=falsified`` is the
+    only state that allows a premise to survive into implementation;
+    ``untested`` is a violation (the design has not done its job);
+    ``confirmed`` without an ``evidence`` pointer is a violation
+    (the conclusion is asserted without where-it-came-from).
+    """
+    violations = []
+    for r in reports:
+        p = r.get("premise")
+        if not p:
+            continue
+        verdict = p.get("verdict")
+        evidence = p.get("evidence")
+        item = r.get("item_id", "?")
+        if verdict == "untested":
+            violations.append(
+                f"[B-025/2] premise item_id={item} verdict=untested — "
+                f"the design did not falsify its own premise: "
+                f"{p.get('claim','?')[:80]}"
+            )
+        elif verdict == "confirmed" and not evidence:
+            violations.append(
+                f"[B-025/2] premise item_id={item} verdict=confirmed "
+                f"without evidence pointer: {p.get('claim','?')[:80]}"
+            )
+    return violations
+
+
+def gather_session_claims(git_common_dir: Path | None = None) -> set[str]:
+    """B-025 voce 12 — names of claim files in
+    ``<git-common-dir>/agentic-sessions/`` (one per active session).
+    Stale claims are treated as live per `SESSION-ISOLATION.md`; the
+    caller filters them by the *handoff's* feature / repo.
+    """
+    if git_common_dir is None:
+        git_common_dir = WORKFLOW_DIR / ".git"
+    claims_dir = git_common_dir / "agentic-sessions"
+    if not claims_dir.exists():
+        return set()
+    return {p.stem for p in claims_dir.iterdir() if p.is_file()}
+
+
+def check_session_claim_present(
+    handoffs: list[dict], claims: set[str]
+) -> list[str]:
+    """B-025 voce 12 — a session that ``claimed a primary tree``
+    (per `SESSION-ISOLATION.md`) has a corresponding claim file. A
+    missing claim on a session that said it claimed is a violation:
+    the rest of the workflow trusts the claim to coordinate writers,
+    and a phantom claim is worse than no claim.
+    """
+    claimed_re = re.compile(r"claimed (?:a )?primary tree", re.IGNORECASE)
+    violations = []
+    for h in handoffs:
+        text = h.get("text", "")
+        if not claimed_re.search(text):
+            continue
+        repo_match = re.search(r"\*\*Repo\*\*:\s*([\w./-]+)", text)
+        feature = repo_match.group(1) if repo_match else h.get("name", "?")
+        if feature not in claims:
+            violations.append(
+                f"[B-025/12] handoff {h.get('name','?')} says it claimed a "
+                f"primary tree but no claim file exists for feature "
+                f"'{feature}' in <git-common-dir>/agentic-sessions/"
+            )
+    return violations
+
+
+def gather_worktrees(repo: Path | None = None) -> list[dict]:
+    """B-025 voce 13 — snapshot of `git worktree list --porcelain`,
+    parsed into ``{path, head, branch, locked}`` dicts. The first
+    entry is the principal worktree; subsequent entries are the
+    worktrees the workflow must account for at session end.
+    """
+    if repo is None:
+        repo = WORKFLOW_DIR
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=repo, capture_output=True, text=True, check=False,
+        )
+    except (FileNotFoundError, OSError):
+        return []
+    worktrees: list[dict] = []
+    current: dict = {}
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            if current:
+                worktrees.append(current)
+            current = {"path": line[len("worktree "):].strip()}
+        elif line.startswith("HEAD "):
+            current["head"] = line[5:].strip()
+        elif line.startswith("branch "):
+            current["branch"] = line[7:].strip()
+        elif line == "locked":
+            current["locked"] = True
+    if current:
+        worktrees.append(current)
+    return worktrees
+
+
+def check_worktrees_cleaned(worktrees: list[dict]) -> list[str]:
+    """B-025 voce 13 — every non-principal worktree is documented as
+    either retained-for-X or to-be-removed in the session handoff
+    (per `SESSION-ISOLATION.md` § "Cleanup at session end"). The check
+    reads the worktree list and emits one violation per non-principal
+    worktree; the handoff writer (or the orchestrator) addresses it.
+    Locked worktrees are reported as critical (they cannot be cleaned
+    without manual unlock).
+    """
+    violations: list[str] = []
+    if len(worktrees) <= 1:
+        return violations
+    principal = worktrees[0]["path"]
+    for wt in worktrees[1:]:
+        branch = wt.get("branch", "?")
+        path = wt.get("path", "?")
+        if wt.get("locked"):
+            violations.append(
+                f"[B-025/13] CRITICAL worktree {path} (branch {branch}) is "
+                f"locked and cannot be removed automatically — the principal "
+                f"worktree is {principal}; unlock or `git worktree remove --force`"
+            )
+        else:
+            violations.append(
+                f"[B-025/13] worktree {path} (branch {branch}) is still "
+                f"present after the session — should be cleaned or its "
+                f"retention documented in the handoff"
+            )
+    return violations
+
+
+def check_rationale_entry_in_pr(prs: list[dict]) -> list[str]:
+    """B-025 voce 14 — a PR that touches the workflow rule registry
+    (``phases/*.md`` or the "Where each rule is enforced" table in
+    `WORKFLOW.md`) must also touch `RATIONALE.md` in the same PR
+    (per WORKFLOW.md General rules: "any change to a load-bearing rule
+    ... adds or updates an entry in `RATIONALE.md`"). A rule change
+    without a rationale entry is an orphan (D-024).
+    """
+    rationale_re = re.compile(r"\bRATIONALE\.md\b")
+    rule_paths = (
+        re.compile(r"^phases/[^\s/]+\.md$"),
+        re.compile(r"^WORKFLOW\.md$"),
+    )
+    violations: list[str] = []
+    for pr in prs:
+        files = pr.get("files") or []
+        touches_rule_registry = False
+        for f in files:
+            fname = f.get("path") if isinstance(f, dict) else f
+            if not fname:
+                continue
+            for rx in rule_paths:
+                if rx.match(fname):
+                    touches_rule_registry = True
+                    break
+        if not touches_rule_registry:
+            continue
+        body = pr.get("body") or ""
+        if rationale_re.search(body) or rationale_re.search(str(files)):
+            continue
+        violations.append(
+            f"[B-025/14] PR #{pr.get('number','?')} touches the rule "
+            f"registry ({[f.get('path') if isinstance(f, dict) else f for f in files]}) "
+            f"but does not touch `RATIONALE.md` — a rule change without "
+            f"a rationale entry is an orphan (D-024)"
+        )
+    return violations
+
+
+def check_audit_in_handoff(handoffs: list[dict]) -> list[str]:
+    """B-025 voce 15 — the most recent handoff names ``audit.py
+    --repo <owner/repo>`` in its Verification section. The session-end
+    gate requires the audit; a handoff that omits the audit command
+    declares "verification" without evidence (I10 weak).
+    """
+    if not handoffs:
+        return []
+    latest = sorted(handoffs, key=lambda h: h.get("name", ""))[-1]
+    text = latest.get("text", "")
+    audit_re = re.compile(r"audit\.py\s+--repo\s+[\w./-]+")
+    if audit_re.search(text):
+        return []
+    return [
+        f"[B-025/15] latest handoff {latest.get('name','?')} does not "
+        f"cite `audit.py --repo <owner/repo>` in its Verification — "
+        f"the session-end gate command must be quoted (I10)"
+    ]
+
+
+def check_phase2_decision_stated(handoffs: list[dict]) -> list[str]:
+    """B-025 voce 3 — every handoff surfaces a phase-2 decision
+    (done / skipped — reason / not applicable). Phase 2 is conditional
+    ("only when the feature touches UI"); the declaration is required
+    either way so a future reader does not have to reconstruct the
+    decision from prose. The literal string ``Phase 2:`` followed by a
+    verdict is the mark; its absence is a violation (same shape as I3
+    skip annotations).
+    """
+    decision_re = re.compile(
+        r"Phase\s*2\s*:\s*(done|skipped|n/?a|not applicable|none)",
+        re.IGNORECASE,
+    )
+    violations = []
+    for h in handoffs:
+        text = h.get("text", "")
+        if decision_re.search(text):
+            continue
+        violations.append(
+            f"[B-025/3] handoff {h.get('name','?')} has no phase-2 "
+            f"decision ('Phase 2: done' / 'Phase 2: skipped — <reason>' / "
+            f"'Phase 2: not applicable')"
+        )
+    return violations
+
+
+def check_reviewer_evidence_verbatim(
+    reports: list[dict], pr_diffs: dict[str, str]
+) -> list[str]:
+    """B-025 voce 8 — every ``quote`` for a code claim appears verbatim in
+    the diff of its ``commit``. A quote that does not match is a
+    hallucination or a stale reference; either way it fails the gate.
+    Coverage claims (``claim=coverage``) carry no quote — the mutation
+    matrix is the proof — and are skipped. Code claims missing ``quote``
+    or ``commit`` are violations: the report does not enable verification.
+    """
+    violations = []
+    for r in reports:
+        claim = r.get("claim", "code")
+        if claim == "coverage":
+            continue
+        quote = r.get("quote")
+        commit = r.get("commit")
+        item = r.get("item_id", "?")
+        criterion = r.get("criterion", "?")
+        if not quote or not commit:
+            violations.append(
+                f"[B-025/8] finding item_id={item} criterion={criterion} "
+                f"claim=code: missing quote or commit (cannot verify)"
+            )
+            continue
+        diff = pr_diffs.get(commit)
+        if diff is None:
+            violations.append(
+                f"[B-025/8] finding item_id={item} commit={commit[:8]} "
+                f"not in pr_diffs (cannot verify)"
+            )
+            continue
+        if quote not in diff:
+            violations.append(
+                f"[B-025/8] finding item_id={item} criterion={criterion} "
+                f"commit={commit[:8]}: quote does not appear verbatim in diff"
+            )
+    return violations
+
+
+def check_i6_zero_actionable(reports: list[dict]) -> list[str]:
+    """B-025 voce 10 — the implement-loop ends only with zero actionable
+    findings (I6). A ``status=open`` finding with ``severity=fatal`` and
+    ``verdict=actionable`` is an unresolved blocker: the fix loop must
+    continue, not exit. Status ``resolved`` closes the finding (the
+    next commit / re-review closes it). ``advisory`` findings are not
+    blockers and never trigger I6 — they ride along in the handoff.
+    """
+    violations = []
+    for r in reports:
+        if (r.get("status", "open") == "open"
+                and r.get("severity") == "fatal"
+                and r.get("verdict") == "actionable"):
+            violations.append(
+                f"[I6/B-025/10] actionable finding item_id={r.get('item_id','?')} "
+                f"criterion={r.get('criterion','?')} reviewer={r.get('reviewer','?')} "
+                f"is still open (fix loop must continue)"
+            )
+    return violations
+
+
+def check_brief_coverage(
+    reports: list[dict], brief_items: list[str]
+) -> list[str]:
+    """B-025 voce 9 — every item of the brief appears in the reviewer
+    reports. ``Silence is not a verdict`` (criterion 7): in a free-form
+    finding list, "conforms", "not applicable" and "never read" are the
+    same output, and that is how a reviewer drops an item from its own
+    brief. The orchestrator counts coverage — every brief item has at
+    least one row in the JSONL, with ``verdict=pass`` / ``fail`` /
+    ``n/a — motivo`` accepted.
+    """
+    violations = []
+    covered = {r.get("item_id") for r in reports}
+    for item in brief_items:
+        if item not in covered:
+            violations.append(
+                f"[B-025/9] brief item '{item}' has no row in any reviewer "
+                f"report (silence is not a verdict)"
+            )
     return violations
 
 

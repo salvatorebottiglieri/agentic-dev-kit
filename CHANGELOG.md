@@ -15,6 +15,19 @@ Code e validazione end-to-end; l'utente valuta in produzione prima
 di promuovere a v0.3.0. **Non consumare senza test**.
 
 ### Added
+- `guards/check_design.py` + `guards/hooks/pre-push` — the DesignDoc gate: a
+  phase-5 design file (`docs/design/<feature>.md`, prose plus a `json design`
+  block) is checked for coherence, signatures against the real code, the four
+  exit kinds with their `handled_at`, and the external frontier's `residual`.
+  The pre-push hook runs the `--gate` subset (no state); the full mode runs at
+  the end of phase 5. Touches `phases/5-program-design.md`, `REVIEW-CRITERIA.md`
+  (Spec axis), `skills/program-design/SKILL.md` and `RATIONALE.md` D-023.
+  The canonical implementation is `~/agentic-workflow/guards/check_design.py`;
+  the kit copy follows it and must not drift.
+- `audit.py` + `tests/test_audit.py` — parity with the canonical
+  `~/agentic-workflow/audit.py` (869 lines, 17 checks) and its test suite
+  (842 lines). The canonical is the source: the kit copies it, with only the
+  module-docstring example path adapted.
 - `WORKFLOW.md` è ora un symlink a `../agentic-workflow/WORKFLOW.md` —
   una sola fonte canonica per le regole. La skill `implement-loop` cita
   `~/agentic-dev-kit/WORKFLOW.md` esplicitamente; ora legge
