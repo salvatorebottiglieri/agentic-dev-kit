@@ -3,6 +3,70 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0-rc] — 2026-10-15
+
+**Release candidate** — allineamento con `agentic-workflow` v0.3.0 (32
+regole, 1 struttura, 19 script, 12 prompt; 17 check in `audit.py`).
+Backward-compatible: nessuna rimozione, solo allineamento. Tutto ciò
+che funzionava con v0.2.0 continua a funzionare.
+
+Questa RC non è la release definitiva. Manca smoke test con Claude
+Code e validazione end-to-end; l'utente valuta in produzione prima
+di promuovere a v0.3.0. **Non consumare senza test**.
+
+### Added
+- `WORKFLOW.md` è ora un symlink a `../agentic-workflow/WORKFLOW.md` —
+  una sola fonte canonica per le regole. La skill `implement-loop` cita
+  `~/agentic-dev-kit/WORKFLOW.md` esplicitamente; ora legge
+  automaticamente la versione aggiornata invece del duplicato vecchio
+  (134 righe, 27 in meno del workflow corrente).
+- `skills/implement-loop/SKILL.md` — paragrafo *"Report format — JSONL,
+  not prose"* (D-025, B-004): i reviewer scrivono `reports/<feature>-<axis>.jsonl`
+  con schema canonico (`criterion`, `item_id`, `verdict`, `severity`,
+  `file`, `line`, `quote`, `commit`, `reviewer`, `claim`, `premise`).
+  Il markdown è **rendered** dal JSONL, non scritto prima. I 3 check
+  meccanici di B-004 (`check_brief_coverage`, `check_reviewer_evidence_verbatim`,
+  `check_i6_zero_actionable`) verificano il formato.
+- `skills/implement-loop/SKILL.md` — I6 esplicito nel fix loop: un
+  finding `severity=fatal + verdict=actionable` deve avere
+  `status=resolved` prima dell'exit; `status=open` blocca il loop.
+  Check meccanico (`audit.py check_i6_zero_actionable`), non judgment.
+- `skills/program-design/SKILL.md` — sezione *"Premises"* (B-025 voce 2,
+  D-033): per ogni design non banale, l'agente elenca le premesse e le
+  falsifica con `{claim, verdict, evidence}`. `untested` è violazione
+  in `audit.py check_premises_falsified`. Refactor che tocca solo call
+  graphs esistenti può skippare.
+- `skills/system-architecture/SKILL.md` — regola *"`**Verification**:`
+  line is mandatory"* (B-025 voce 4, D-035): ogni invariante cita uno
+  script o funzione back-tickata che lo pinni. Mai "judgment" da solo.
+  `audit.py check_invariant_verification_exists` rifiuta il design se
+  la riga manca, cita una funzione inesistente, o dice solo "judgment".
+  È il caposaldo D-024 applicato agli invarianti di sistema.
+
+### Not changed (per trasparenza)
+- `product-review` non è patchata: le regole modificate (JSONL, premesse,
+  verification) non riguardano mockup/ticket UI. Le sue istruzioni
+  interne sono auto-contenute e invariate.
+- Le skill Matt Pocock (`codebase-design`, `code-review`,
+  `ponytail-review`, `tdd`, `to-spec`, `to-tickets`, `grill-with-docs`,
+  `domain-modeling`, `ask-matt`) non sono patchate: vivono in un repo
+  upstream separato. Leggono WORKFLOW.md (aggiornato via symlink) e
+  quindi traggono automaticamente beneficio dalle 32 regole senza
+  richiedere patch locali.
+
+### Rollback
+Le 3 patch additive non rompono il comportamento esistente. Se vuoi
+tornare a v0.2.0 in locale: `cp -a ~/.agents/skills.bak.20261015/
+{implement-loop,product-review,program-design,system-architecture}
+~/.agents/skills/` (backup creato durante l'install). Il branch
+`v0.3.0-rc` resta intatto.
+
+### Related
+- `agentic-workflow` master al commit `b35897c` (pushato) contiene
+  le 32 regole, D-041 (pre-commit hook per RATIONALE.md = prima regola
+  a livello struttura), e 4 task synth R-003 (H5/H6/H7/H8 PASS).
+- Handoff: `agentic-workflow/handoffs/handoff-workflow-split-v030rc-20261015.md`.
+
 ## [0.2.0] — 2026-10-14
 
 Pre-commit gate: workflow rules that asked the agent to *report* a fact
