@@ -22,11 +22,12 @@ invariants` (law → negation → where verified).
 
 1. **One module, one bounded context.** The module is named with a
    `CONTEXT.md` term; a module whose name needs "and" is two modules.
-2. **Published interface only.** Other modules import from the module's
-   published interface (in Python: `<module>/api.py`); everything else is
-   internal. The published interface speaks only domain types and IDs.
-3. **Data ownership.** Each table belongs to exactly one module, which
-   alone reads and writes it. Another module gets that data through the
+2. **Published interface only.** Other modules depend only on the module's
+   published interface; everything else is the module's internals. Where
+   each part lives is the stack's layout ([ENFORCEMENT.md](ENFORCEMENT.md)).
+   The published interface speaks only domain types and IDs.
+3. **Data ownership.** Each piece of stored data (table, collection,
+   stream) belongs to exactly one module, which alone reads and writes it. Another module gets that data through the
    published interface or holds its own copy fed by events; references
    across modules are bare IDs. A cross-module report reads a read model fed
    by events.
@@ -64,8 +65,9 @@ _Done when: the branch is named in the session, with the evidence for it
 ### 2. Write or extend the fitness function
 
 Follow [ENFORCEMENT.md](ENFORCEMENT.md) for the stack. Then prove each new or
-changed contract can fail: add a **control violation** for it (an import of
-another module's internals, a cycle, a shared-kernel import) in a scratch
+changed contract can fail: add a **control violation** for it (a dependency
+on another module's internals, a cycle, the shared kernel depending on a
+module) in a scratch
 change, run the check, see that contract red, discard the change.
 
 _Done when: the check runs in the repo's canonical CI command and passes on
@@ -80,9 +82,9 @@ invariants` (`system-architecture` step 4 appends both):
 ````markdown
 ### Module map
 
-| Module | Bounded context (CONTEXT.md) | Published interface | Owns (tables) | Depends on | Publishes events |
+| Module | Bounded context (CONTEXT.md) | Published interface | Owns (stored data) | Depends on | Publishes events |
 |---|---|---|---|---|---|
-| billing | Billing | `billing/api.py`: `charge(order_id, amount) -> Charge` | `invoice`, `charge` | orders | `InvoiceIssued` (after commit, outbox) |
+| billing | Billing | `charge(order_id, amount) -> Charge` | `invoice`, `charge` | orders | `InvoiceIssued` (after commit, outbox) |
 
 ```mermaid
 flowchart LR

@@ -11,7 +11,7 @@ implement-loop writes their tests first (red), review verifies coverage.
 When the system is a modular monolith (or the spec creates or splits one),
 `skill://modular-monolith` runs inside this phase: module map, module
 invariants, and a fitness function in CI that goes red on a boundary
-violation. A feature that adds a module, an edge between modules or a table
+violation. A feature that adds a module, an edge between modules or stored data
 is not skippable here, whatever its diff shape.
 Skip: bug fix, trivial feature, data-only. Mechanical refactor and
 follows-existing-pattern skip the diagrams/contracts but NOT the invariant

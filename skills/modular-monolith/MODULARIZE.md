@@ -6,13 +6,12 @@ ticket at a time.
 
 ### 1. Map what is there
 
-Draw the actual dependency graph between the top-level packages (in Python:
-`import-linter`'s `lint-imports` with an `acyclic_siblings` contract on the
-root reports the cycles; `grimp` or `pydeps` draw the graph). Record which
-tables each package reads and writes.
+Draw the actual dependency graph between the top-level packages with the
+stack's dependency-map tool ([ENFORCEMENT.md](ENFORCEMENT.md)). Record which
+stored data each package reads and writes.
 
 _Done when: the graph covers every top-level package, every cycle is listed,
-and every table has its readers and writers listed._
+and every piece of stored data has its readers and writers listed._
 
 ### 2. Draw the target map
 
@@ -27,23 +26,24 @@ the target graph is acyclic._
 
 ### 3. Freeze the violations
 
-Run SKILL.md step 2 for the **target** map, with every current import
-violation listed in `ignore_imports` (or the stack's equivalent). The debt is
-that list plus the cross-module table accesses of step 1; both only shrink.
+Run SKILL.md step 2 for the **target** map, with every current boundary
+violation in the fitness function's **exception list** (ENFORCEMENT.md names
+it per stack). The debt is that list plus the cross-module data accesses of
+step 1; both only shrink.
 
 _Done when: SKILL.md step 2 is done (green on today's code, every contract
-red on its control violation), and each ignored import and each
-cross-module table access is traceable to a target module._
+red on its control violation), and each exception and each cross-module
+data access is traceable to a target module._
 
 ### 4. Plan the extraction
 
 One ticket per module extraction, ordered by the fewest inbound violations
-first. Each ticket moves code behind the module's `api.py`, moves table
-access behind the owner (law 3), and **deletes its entries** from
-`ignore_imports` — the ticket is done when its entries are gone and the check
+first. Each ticket moves code behind the module's published
+interface, moves data access behind the owner (law 3), and **deletes its
+entries** from the exception list — the ticket is done when its entries are gone and the check
 is green.
 
-_Done when: every frozen import violation and every cross-module table
-access from step 1 belongs to exactly one ticket._
+_Done when: every exception and every cross-module data access from step 1
+belongs to exactly one ticket._
 
 SKILL.md step 2 is already satisfied by step 3: continue at SKILL.md step 3.

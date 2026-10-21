@@ -25,28 +25,22 @@ story._
 
 ### 3. Assign data ownership and edges
 
-Give each table to one module. Draw the edges: a call where the caller needs
-the answer, an event where others only react (law 5). Break every cycle —
+Give each piece of stored data to one module. Draw the edges: a call where
+the caller needs the answer, an event where others only react (law 5). Break every cycle —
 usually by turning the back edge into an event, or by moving the concept
 that both sides need into the module that creates it.
 
-_Done when: every table has exactly one owner and the graph is acyclic._
+_Done when: every piece of stored data has exactly one owner and the graph
+is acyclic._
 
 ### 4. Lay out the code
 
-Python layout (other stacks: the same shape in their packaging unit). All
-code that is not published lives under `internal/`:
+Each module is one packaging unit of the stack with two parts: the published
+interface and the internals. All code that is not published sits in the
+internals; the shared kernel is a unit of its own. The concrete layout is the
+stack's ([ENFORCEMENT.md](ENFORCEMENT.md)).
 
-```text
-src/<app>/
-  shared/            # technical kernel only (law 6)
-  <module>/
-    __init__.py      # empty — the published interface lives in api.py
-    api.py           # published interface: functions, DTOs, event types
-    internal/        # domain, persistence, adapters — private to the module
-```
-
-_Done when: every module has `api.py` and `internal/` and nothing else
-besides `__init__.py`, and `shared/` holds no `CONTEXT.md` term._
+_Done when: every module follows the stack layout, with only the published
+interface outside its internals, and `shared/` holds no `CONTEXT.md` term._
 
 Then go back to SKILL.md step 2.

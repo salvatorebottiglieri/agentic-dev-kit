@@ -51,7 +51,7 @@ Not every feature needs all three artifacts. Classify based on the PRD:
 **Modular monolith.** When the system is one deployable split into modules —
 or the PRD creates one, or sets out to split an existing codebase — read
 `skill://modular-monolith` now and run it before step 3. This holds even when
-the row above says skip: a feature that adds a module, an edge or a table
+the row above says skip: a feature that adds a module, an edge or stored data
 still changes the module map. Step 3 adds its rows to the same `### System
 invariants` table, after the module rows.
 

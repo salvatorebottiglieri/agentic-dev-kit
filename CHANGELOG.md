@@ -7,11 +7,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - `skills/modular-monolith/` — designs or evolves a modular monolith inside
-  phase 3: module map (bounded context, published interface, owned tables,
-  edges, events), module rows of the system invariants, and a fitness
+  phase 3: module map (bounded context, published interface, owned stored
+  data, edges, events), module rows of the system invariants, and a fitness
   function in CI. Three branches: greenfield, feature, modularize (ratchet on
-  `ignore_imports`). Python recipe with `import-linter>=2.6`; other stacks
-  listed with their tools.
+  the fitness function's exception list). Stack-neutral except
+  `ENFORCEMENT.md`, which holds the per-stack layout and tools: full Python
+  recipe with `import-linter>=2.6`, other stacks with their tools.
 - `RATIONALE.md` D-042.
 
 ### Changed

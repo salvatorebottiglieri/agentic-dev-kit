@@ -811,7 +811,7 @@ TARGET.md records the evolution; this document records the reasons.
      Escalation trigger: a review finds a cross-module table access → per-module
      DB roles become a ticket.
   4. **Not skippable by diff shape**: a feature that adds a module, an edge or
-     a table changes the module map, even when it "follows existing patterns".
+     stored data changes the module map, even when it "follows existing patterns".
 - **Rule location.** `phases/3-system-architecture.md`; `skills/system-architecture`
   (step 2, template, "How this feeds other skills"); `skills/modular-monolith/`.
 - **Source.** Owner request, session of 2026-10-21 (branch `feature/modular-monolith`).

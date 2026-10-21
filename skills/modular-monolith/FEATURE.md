@@ -19,7 +19,8 @@ A change to an existing published interface entry names every module that
 calls it.
 
 _Done when: the module-map diff (`+ / ~ / -`) lists every interface entry,
-edge and table the feature touches, and the graph stays acyclic._
+edge and piece of stored data the feature touches, and the graph stays
+acyclic._
 
 Then go back to SKILL.md step 2 — usually to extend the fitness function for
 a new module or edge.
