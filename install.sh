@@ -19,7 +19,7 @@ if [[ "${1:-}" == "--gate" ]]; then
   exec python3 "$KIT_DIR/guards/gate.py" install "${@:2}"
 fi
 SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.claude/skills}"
-SKILLS=(implement-loop product-review system-architecture program-design)
+SKILLS=(implement-loop product-review system-architecture modular-monolith program-design)
 
 mkdir -p "$SKILLS_DIR"
 echo "Installing agentic-dev-kit skills into: $SKILLS_DIR"

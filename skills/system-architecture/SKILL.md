@@ -48,6 +48,13 @@ Not every feature needs all three artifacts. Classify based on the PRD:
 | Only data (new field, new table, no new orchestration) | Data model only |
 | Only existing patterns (follows existing routes exactly) | Skip — no new architecture needed |
 
+**Modular monolith.** When the system is one deployable split into modules —
+or the PRD creates one, or sets out to split an existing codebase — read
+`skill://modular-monolith` now and run it before step 3. This holds even when
+the row above says skip: a feature that adds a module, an edge or stored data
+still changes the module map. Step 3 adds its rows to the same `### System
+invariants` table, after the module rows.
+
 **System invariants** are produced whenever the PRD introduces state
 transitions, a data model, API contracts, or touches domain laws from
 `CONTEXT.md`/ADR — i.e. almost always. They are the properties that must
@@ -161,7 +168,7 @@ verified**.
 - **Where verified**: the test file that pins it (or "da scrivere in implement-loop").
 - Derive them from the other artifacts: state machine → transition invariants; data model → structural invariants; endpoint contracts → response invariants; domain laws already in ADR/CONTEXT.md → codify them.
 - **Anti-vacuity**: an invariant whose test cannot fail is an opinion. If no test can pin it, mark it `[non verificabile — opinione]` instead of pretending.
-- Only invariants that can be checked mechanically or by a deterministic test belong here — invariants that need LLM judgment belong in `## Testing Decisions`.
+- Only invariants that can be checked mechanically or by a deterministic test belong here — invariants that need LLM judgment belong in `## Testing Decisions`. Two marked exceptions: `[non verificabile — opinione]` (no test can pin it) and `[prompt — no mechanical check]` (a module law from `modular-monolith` with its review-time check named).
 
 #### Data model
 
@@ -222,6 +229,10 @@ relevant:
 
 ```markdown
 ## System Architecture
+
+### Module map (if applicable)
+
+<table + flowchart from skill://modular-monolith>
 
 ### Interaction flow
 
@@ -288,6 +299,7 @@ to `ready-for-agent` — or directly to `to-tickets`.
 | **program-design** | Works one ticket deeper: call-stack tree, file-tree diff, type signatures. The architecture says *which* endpoint, program design says *how*. |
 | **implement-loop** | The implement subagent sees the full ticket body — architecture context, `## System Invariants`, and program design signatures. The invariants are test contract: their tests are written first (red), then the implementation (green). |
 | `to-spec` | Produces the PRD. System architecture evolves it — adds the `## System Architecture` section. |
+| `modular-monolith` | Runs at step 2 for modular monoliths; its output is the module map, the module invariants and the fitness function. |
 | `codebase-design` | Provides vocabulary (deep module, seam). System architecture is a different layer — connections between modules, not depth of one. |
 | `domain-modeling` | Uses `CONTEXT.md` vocabulary. If a term is ambiguous during architecture, call `domain-modeling`. |
 | `improve-codebase-architecture` | If a structural problem emerges ("this service is too coupled"), note it but don't resolve it here. |

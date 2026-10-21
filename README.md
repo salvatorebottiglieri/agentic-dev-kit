@@ -22,7 +22,7 @@ design → implement-loop) and the review criteria family that gates a merge.
 | `WORKFLOW.md` | **Start here.** The operational spec — the phases, in order, and the rules. |
 | `INVARIANTS.md` / `INVARIANTS-METHOD.md` | The workflow invariants (I1–I6) the audit enforces, and the theory behind them. |
 | `RATIONALE.md` | The *why* of every load-bearing rule. |
-| `skills/` | The four custom skills the workflow invokes (`implement-loop`, `product-review`, `system-architecture`, `program-design`). |
+| `skills/` | The custom skills the workflow invokes (`implement-loop`, `product-review`, `system-architecture`, `modular-monolith`, `program-design`). |
 | `audit.py` + `tests/` | The session-end gate: verifies the invariants against the tracker. |
 | `handoffs/` | Where your own session handoffs land (starts empty). |
 

@@ -3,6 +3,24 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `skills/modular-monolith/` — designs or evolves a modular monolith inside
+  phase 3: module map (bounded context, published interface, owned stored
+  data, edges, events), module rows of the system invariants, and a fitness
+  function in CI. Three branches: greenfield, feature, modularize (ratchet on
+  the fitness function's exception list). Stack-neutral except
+  `ENFORCEMENT.md`, which holds the per-stack layout and tools: full Python
+  recipe with `import-linter>=2.6`, other stacks with their tools.
+- `RATIONALE.md` D-042.
+
+### Changed
+- `system-architecture` reads `modular-monolith` at step 2 and carries a
+  `### Module map` in its template; phase 3 states that module-map changes
+  are not skippable.
+- `install.sh` links the new skill.
+
 ## [0.2.0] — 2026-10-14
 
 Pre-commit gate: workflow rules that asked the agent to *report* a fact
