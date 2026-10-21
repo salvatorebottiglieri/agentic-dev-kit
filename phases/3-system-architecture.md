@@ -8,6 +8,11 @@ Mermaid sequence/state diagrams, endpoint contracts, data model, **and
 law → negation → where verified; anti-vacuity: an invariant without a test
 that can fail is an opinion). The invariants are test contract downstream:
 implement-loop writes their tests first (red), review verifies coverage.
+When the system is a modular monolith (or the spec creates or splits one),
+`skill://modular-monolith` runs inside this phase: module map, module
+invariants, and a fitness function in CI that goes red on a boundary
+violation. A feature that adds a module, an edge between modules or a table
+is not skippable here, whatever its diff shape.
 Skip: bug fix, trivial feature, data-only. Mechanical refactor and
 follows-existing-pattern skip the diagrams/contracts but NOT the invariant
 elicitation: if the touched module has domain laws (documented or new), the

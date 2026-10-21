@@ -26,7 +26,7 @@ The phase file holds the phase's own rules.
 |---|---|---|---|
 | 1 | Design & alignment | `grill-with-docs`, `domain-modeling`, `to-spec` | `phases/1-design-and-alignment.md` |
 | 2 | Product review (only when the feature touches UI) | `product-review` | `phases/2-product-review.md` |
-| 3 | System architecture (only when non-trivial) | `system-architecture` | `phases/3-system-architecture.md` |
+| 3 | System architecture (only when non-trivial) | `system-architecture`, `modular-monolith` | `phases/3-system-architecture.md` |
 | 4 | Tickets | `to-tickets` | below |
 | 5 | Program design (near-always) | `program-design` | `phases/5-program-design.md` |
 | 6 | Implement-loop | `implement-loop`, `code-review`, `ponytail-review` | `phases/6-implement-loop.md` |
@@ -85,7 +85,7 @@ structural check.
   ("Phase N skipped — <reason>") and annotated on the ticket/spec:
   "Skipped — <reason>".
 - Custom skills (implement-loop, product-review, program-design,
-  system-architecture) live in `~/agentic-dev-kit/skills/` (repo:
+  system-architecture, modular-monolith) live in `~/agentic-dev-kit/skills/` (repo:
   github.com/salvatorebottiglieri/agentic-dev-kit); installed copies in your
   agent's skills dir (e.g. `~/.claude/skills/`). `tightrope` is deprecated
   (folded into phase 6).

@@ -786,6 +786,36 @@ TARGET.md records the evolution; this document records the reasons.
   `README.md` ("Pre-commit gate").
 - **Source.** Issue #2 of this repository.
 
+## D-042 — Modular-monolith boundaries are held by a fitness function, read as a branch of phase 3 (2026-10-21)
+
+- **Context.** Phase 3 described the contracts between *services*. In a
+  modular monolith the boundaries are between modules of one deployable, and
+  nothing in the workflow stated them or checked them: the rules ("import only
+  the published interface", "one owner per table", "no cycles") were
+  convention, the kind that erodes one import at a time.
+- **Decision.**
+  1. **A separate skill, user-invocation only.** `modular-monolith` is read via
+     `skill://` from `system-architecture` step 2, like the other phase skills:
+     zero context load, one pointer at the branch point. It has three branches
+     (greenfield, feature on an existing modular monolith, modularize an
+     existing codebase) disclosed in separate files.
+  2. **The boundaries are `script`, not `prompt`.** Each law the stack can
+     check maps to a fitness-function contract in the canonical CI command,
+     proven red by a control violation (same anti-vacuity as the system
+     invariants). Python recipe: `import-linter>=2.6` (`protected` per module,
+     `acyclic_siblings`, `forbidden` for the shared kernel), verified on a toy
+     project on 2026-10-21, including the `shop.*` wildcard pitfall and the
+     stale-`ignore_imports` failure that makes the modularize ratchet native.
+  3. **Data ownership stays `prompt`** until the repo has one DB schema and
+     role per module; the invariant row says so explicitly.
+     Escalation trigger: a review finds a cross-module table access → per-module
+     DB roles become a ticket.
+  4. **Not skippable by diff shape**: a feature that adds a module, an edge or
+     a table changes the module map, even when it "follows existing patterns".
+- **Rule location.** `phases/3-system-architecture.md`; `skills/system-architecture`
+  (step 2, template, "How this feeds other skills"); `skills/modular-monolith/`.
+- **Source.** Owner request, session of 2026-10-21 (branch `feature/modular-monolith`).
+
 ---
 
 ## Not a rationale yet (candidates)
