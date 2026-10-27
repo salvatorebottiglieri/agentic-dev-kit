@@ -237,3 +237,21 @@ def test_a_really_extra_argument_is_still_proposed(tmp_path: Path, capsys) -> No
         tmp_path, {"m.py": "def call(name):\n    ...\n"}, "m.py",
         "def call(name, args: dict[str, Any]): ...", capsys)
     assert "proposed" in out and "adds args" in out, out
+
+
+def test_signature_spread_over_several_lines_is_read(tmp_path: Path, capsys) -> None:
+    """Declared code is often a formatted multi-line `def`: the arguments must be read
+    across lines, not only when the closing parenthesis is on the same line."""
+    code = "class T:\n    def run(\n        self,\n        a,\n        b,\n    ): ..."
+    status, out = _declared_vs_code(
+        tmp_path, {"m.py": "class T:\n    def run(self, a, b):\n        ...\n"}, "m.py", code, capsys)
+    assert status == 0 and "compatible" in out and "new" not in out, out
+
+
+def test_parenthesis_inside_a_default_does_not_cut_the_arguments(tmp_path: Path, capsys) -> None:
+    """The argument list ends at the MATCHING parenthesis: `n=(1, 2)` must not hide the
+    required keyword-only `m` that follows it (false `incompatible: missing m`)."""
+    code = "def f(a, n=(1, 2), *, m): ..."
+    status, out = _declared_vs_code(
+        tmp_path, {"m.py": "def f(a, n=(1, 2), *, m):\n    ...\n"}, "m.py", code, capsys)
+    assert status == 0 and "incompatible" not in out, out

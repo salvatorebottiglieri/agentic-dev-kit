@@ -146,24 +146,41 @@ def declared_defs(doc: dict) -> list[dict]:
     return out
 
 
+def _matching_paren(code: str, start: int) -> int:
+    """Index of the `)` that closes the `(` at `start`, or -1 if it never closes."""
+    depth, quote = 0, ""
+    for i in range(start, len(code)):
+        ch = code[i]
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
 def _defs_with_class(code: str) -> list[tuple[str | None, str, str]]:
     """`(class, name, args)` of each `def` in a declared snippet. The snippet is
-    pseudo-code (bodies are `...`), so the class comes from indentation, not from `ast`."""
+    pseudo-code (bodies are `...`), so the class comes from indentation, not from `ast`;
+    the argument list runs to the matching `)`, over several lines if need be."""
     out, stack = [], []          # stack: (indent, class name)
-    for line in code.splitlines():
-        indent = len(line) - len(line.lstrip())
-        text = line.strip()
-        if not text:
-            continue
+    for hit in re.finditer(r"^([ \t]*)(class\s+(\w+)|(?:async\s+)?def\s+(\w+)\s*\()", code, re.M):
+        indent = len(hit.group(1))
         while stack and indent <= stack[-1][0]:
             stack.pop()
-        cls = re.match(r"class\s+(\w+)", text)
-        if cls:
-            stack.append((indent, cls.group(1)))
+        if hit.group(3):
+            stack.append((indent, hit.group(3)))
             continue
-        fn = re.match(r"(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)", text)
-        if fn:
-            out.append((stack[-1][1] if stack else None, fn.group(1), fn.group(2)))
+        open_at = hit.end() - 1
+        close_at = _matching_paren(code, open_at)
+        if close_at < 0:
+            continue
+        out.append((stack[-1][1] if stack else None, hit.group(4), code[open_at + 1:close_at]))
     return out
 
 
