@@ -28,11 +28,12 @@ di promuovere a v0.3.0. **Non consumare senza test**.
   `~/agentic-workflow/audit.py` (869 lines, 17 checks) and its test suite
   (842 lines). The canonical is the source: the kit copies it, with only the
   module-docstring example path adapted.
-- `WORKFLOW.md` è ora un symlink a `../agentic-workflow/WORKFLOW.md` —
-  una sola fonte canonica per le regole. La skill `implement-loop` cita
-  `~/agentic-dev-kit/WORKFLOW.md` esplicitamente; ora legge
-  automaticamente la versione aggiornata invece del duplicato vecchio
-  (134 righe, 27 in meno del workflow corrente).
+- `WORKFLOW.md` è un file reale derivato dal canonico di `agentic-workflow` da
+  `guards/sync_workflow.py` (`--check` rileva il drift). Non è un symlink: i
+  cloni del repo pubblico non possono risolvere `../agentic-workflow`, che è
+  privato. La copia differisce solo per i percorsi `~/agentic-workflow/` →
+  `~/agentic-dev-kit/` e per le righe che citano file solo privati
+  (`LESSONS.md`, `BACKLOG.md`, `gen-flow.py`).
 - `skills/implement-loop/SKILL.md` — paragrafo *"Report format — JSONL,
   not prose"* (D-025, B-004): i reviewer scrivono `reports/<feature>-<axis>.jsonl`
   con schema canonico (`criterion`, `item_id`, `verdict`, `severity`,
@@ -63,7 +64,7 @@ di promuovere a v0.3.0. **Non consumare senza test**.
 - Le skill Matt Pocock (`codebase-design`, `code-review`,
   `ponytail-review`, `tdd`, `to-spec`, `to-tickets`, `grill-with-docs`,
   `domain-modeling`, `ask-matt`) non sono patchate: vivono in un repo
-  upstream separato. Leggono WORKFLOW.md (aggiornato via symlink) e
+  upstream separato. Leggono WORKFLOW.md (aggiornato dalla copia sincronizzata) e
   quindi traggono automaticamente beneficio dalle 32 regole senza
   richiedere patch locali.
 
