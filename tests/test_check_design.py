@@ -140,3 +140,75 @@ def test_state_of_an_async_function_is_visible(tmp_path: Path) -> None:
     doc = {"data_flow": {"nodes": [{"id": "mod.sync_it", "module": "mod.py",
                                     "kind": "mod"}]}}
     assert CD.check_states(doc, CD.real_functions(tmp_path)) == []
+
+
+def _declared_vs_code(tmp_path: Path, files: dict[str, str], module: str, code: str,
+                      capsys) -> tuple[int, str]:
+    """Run the gate over a repo made of `files` and a design declaring `code` in `module`."""
+    for rel, src in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(src, encoding="utf-8")
+    design = tmp_path / "design.json"
+    design.write_text(json.dumps({"signatures": [
+        {"module": module, "language": "python", "code": code}]}))
+    status = CD.main(["check_design", str(design), str(tmp_path), "--gate"])
+    return status, capsys.readouterr().out
+
+
+def test_module_suffix_needs_a_path_boundary(tmp_path: Path, capsys) -> None:
+    """B-028 (1): `workflow/tools.py` must not match `collection_builder_workflow/tools.py`.
+    The declared signature is identical to the code in `workflow/`; the same name in the
+    look-alike module has another one. Matching by bare suffix compared against the wrong
+    file and reported `incompatible`."""
+    status, out = _declared_vs_code(
+        tmp_path,
+        {"collection_builder_workflow/tools.py": "def run(a, b):\n    return a\n",
+         "workflow/tools.py": "def run(a):\n    return a\n"},
+        "workflow/tools.py", "def run(a): ...", capsys)
+    assert status == 0, out
+    assert "workflow/tools.py:1" in out and "collection_builder_workflow" not in out
+
+
+def test_declared_class_selects_the_method(tmp_path: Path, capsys) -> None:
+    """B-028 (2): four `_arun` in one module, one per tool. The declared signature sits
+    inside `class DemoSavePageTool:`; it is compared with that class's method, not with
+    the first `_arun` of the file."""
+    src = ("class OtherTool:\n    def _arun(self, query, limit):\n        ...\n\n"
+           "class DemoSavePageTool:\n    def _arun(self, page):\n        ...\n")
+    status, out = _declared_vs_code(
+        tmp_path, {"workflow/tools.py": src}, "workflow/tools.py",
+        "class DemoSavePageTool:\n    def _arun(self, page): ...", capsys)
+    assert status == 0, out
+    assert "compatible" in out and "incompatible" not in out
+
+
+def test_declared_class_really_incompatible_is_still_caught(tmp_path: Path, capsys) -> None:
+    """Control for the class filter: if the method of the declared class does differ,
+    the gate still fails — filtering by class must not make the check lenient."""
+    src = ("class OtherTool:\n    def _arun(self, page):\n        ...\n\n"
+           "class DemoSavePageTool:\n    def _arun(self, page, force):\n        ...\n")
+    status, out = _declared_vs_code(
+        tmp_path, {"workflow/tools.py": src}, "workflow/tools.py",
+        "class DemoSavePageTool:\n    def _arun(self, page): ...", capsys)
+    assert status == 1 and "incompatible" in out and "missing force" in out
+
+
+def test_method_missing_in_the_declared_class_is_new(tmp_path: Path, capsys) -> None:
+    """A `__init__` declared in a class that has none is new, even if other classes of the
+    module have one — the same-mechanism false positive of B-028."""
+    src = "class OtherTool:\n    def __init__(self, x, y):\n        ...\n\nclass Fresh:\n    pass\n"
+    status, out = _declared_vs_code(
+        tmp_path, {"workflow/tools.py": src}, "workflow/tools.py",
+        "class Fresh:\n    def __init__(self, z): ...", capsys)
+    assert status == 0 and "new" in out and "proposed" not in out, out
+
+
+def test_state_module_match_needs_a_path_boundary(tmp_path: Path) -> None:
+    """The same suffix looseness lived in `check_states`: a node declared `mod` in
+    `workflow/tools.py` was found in `collection_builder_workflow/tools.py`."""
+    (tmp_path / "collection_builder_workflow").mkdir()
+    (tmp_path / "collection_builder_workflow" / "tools.py").write_text("def run(a):\n    ...\n")
+    doc = {"data_flow": {"nodes": [{"id": "tools.run", "module": "workflow/tools.py",
+                                    "kind": "mod"}]}}
+    problems = CD.check_states(doc, CD.real_functions(tmp_path))
+    assert problems and "does not exist" in problems[0]

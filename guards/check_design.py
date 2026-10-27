@@ -73,6 +73,26 @@ def load_design(path: Path) -> dict:
     return json.loads(hit.group(1))
 
 
+def _enclosing_classes(tree: ast.AST) -> dict[ast.AST, str]:
+    """Innermost `class` of every function node (absent for module-level functions)."""
+    owner: dict[ast.AST, str] = {}
+
+    def visit(node: ast.AST, cls: str | None) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and cls:
+                owner[child] = cls
+            visit(child, child.name if isinstance(child, ast.ClassDef) else cls)
+
+    visit(tree, None)
+    return owner
+
+
+def module_matches(real_module: str, declared: str) -> bool:
+    """`declared` names the module by its path or a trailing part of it, cut at a `/`:
+    `workflow/tools.py` is `a/workflow/tools.py`, not `a_workflow/tools.py`."""
+    return real_module == declared or real_module.endswith("/" + declared)
+
+
 def real_functions(root: Path) -> dict[str, list[dict]]:
     """Every `def` in the repo, indexed by name."""
     out: dict[str, list[dict]] = {}
@@ -83,6 +103,7 @@ def real_functions(root: Path) -> dict[str, list[dict]]:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
+        classes = _enclosing_classes(tree)
         for node in ast.walk(tree):
             # `ast.AsyncFunctionDef` is NOT a subclass of `ast.FunctionDef`
             # (both derive from `stmt`); indexing only the latter makes every
@@ -100,6 +121,7 @@ def real_functions(root: Path) -> dict[str, list[dict]]:
             decos = [ast.unparse(d) for d in node.decorator_list]
             out.setdefault(node.name, []).append({
                 "module": str(path.relative_to(root)),
+                "cls": classes.get(node),
                 "line": node.lineno,
                 "required": required,
                 "optional": optional,
@@ -117,10 +139,31 @@ def declared_defs(doc: dict) -> list[dict]:
             continue
         where = entry.get("module") or ""
         path = re.search(r"[\w./-]+\.py", where)
-        for name, raw in re.findall(r"def\s+(\w+)\s*\(([^)]*)\)", entry.get("code") or ""):
-            out.append({"name": name, "args": raw,
+        for cls, name, raw in _defs_with_class(entry.get("code") or ""):
+            out.append({"name": name, "args": raw, "cls": cls,
                         "module": path.group(0) if path else None,
                         "in": where})
+    return out
+
+
+def _defs_with_class(code: str) -> list[tuple[str | None, str, str]]:
+    """`(class, name, args)` of each `def` in a declared snippet. The snippet is
+    pseudo-code (bodies are `...`), so the class comes from indentation, not from `ast`."""
+    out, stack = [], []          # stack: (indent, class name)
+    for line in code.splitlines():
+        indent = len(line) - len(line.lstrip())
+        text = line.strip()
+        if not text:
+            continue
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+        cls = re.match(r"class\s+(\w+)", text)
+        if cls:
+            stack.append((indent, cls.group(1)))
+            continue
+        fn = re.match(r"(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)", text)
+        if fn:
+            out.append((stack[-1][1] if stack else None, fn.group(1), fn.group(2)))
     return out
 
 
@@ -159,7 +202,7 @@ def check_states(doc: dict, real: dict[str, list[dict]]) -> list[str]:
             continue
         name = node["id"].split(".")[-1]
         module = node.get("module")
-        here = [c for c in real.get(name, []) if not module or c["module"].endswith(module)]
+        here = [c for c in real.get(name, []) if not module or module_matches(c["module"], module)]
         if kind == "add" and here:
             out.append(f"{node['id']}: declared NEW, but it exists in "
                        f"{here[0]['module']}:{here[0]['line']}")
@@ -320,8 +363,12 @@ def main(argv: list[str]) -> int:
     for decl in declared_defs(doc):
         cands = real.get(decl["name"], [])
         if decl["module"]:
-            here = [c for c in cands if c["module"].endswith(decl["module"])]
+            here = [c for c in cands if module_matches(c["module"], decl["module"])]
             cands = here or cands
+        if decl["cls"]:
+            # a method is compared with the method of ITS class, never with
+            # a same-named one of another class (B-028)
+            cands = [c for c in cands if c["cls"] == decl["cls"]]
         if not cands:
             rows.append((decl["name"], decl["module"] or decl["in"], "new", ""))
             continue
@@ -329,7 +376,7 @@ def main(argv: list[str]) -> int:
         verdict, note = classify(decl, real_fn)
         if len(cands) > 1:
             note = (note + " · " if note else "") + f"{len(cands)} definitions with this name"
-        if decl["module"] and not real_fn["module"].endswith(decl["module"]):
+        if decl["module"] and not module_matches(real_fn["module"], decl["module"]):
             note = (note + " · " if note else "") + f"in the code it is {real_fn['module']}"
         rows.append((decl["name"], f"{real_fn['module']}:{real_fn['line']}", verdict, note))
 
