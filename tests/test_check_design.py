@@ -212,3 +212,28 @@ def test_state_module_match_needs_a_path_boundary(tmp_path: Path) -> None:
                                     "kind": "mod"}]}}
     problems = CD.check_states(doc, CD.real_functions(tmp_path))
     assert problems and "does not exist" in problems[0]
+
+
+def test_commas_inside_brackets_do_not_split_arguments() -> None:
+    """B-029: `tokens()` split the argument list on every comma, so the type
+    `dict[str, Any]` produced a phantom argument `Any]` and a false `proposed`."""
+    assert CD.tokens("self, payload: dict[str, Any], limit: int = 3") == ["payload", "limit"]
+    assert CD.tokens("cb: Callable[[int, str], bool], *, n=(1, 2)") == ["cb", "n"]
+    assert CD.tokens('sep=",", rows: list[tuple[int, int]]') == ["sep", "rows"]
+
+
+def test_bracketed_type_is_compatible_end_to_end(tmp_path: Path, capsys) -> None:
+    """The same case through the gate: a declared signature identical to the code,
+    with a multi-parameter generic, must be `compatible`, not `proposed`."""
+    status, out = _declared_vs_code(
+        tmp_path, {"m.py": "def call(name, args: dict[str, Any]):\n    ...\n"}, "m.py",
+        "def call(name, args: dict[str, Any]): ...", capsys)
+    assert status == 0 and "compatible" in out and "proposed" not in out, out
+
+
+def test_a_really_extra_argument_is_still_proposed(tmp_path: Path, capsys) -> None:
+    """Control: the bracket-aware split must not hide an argument the code lacks."""
+    status, out = _declared_vs_code(
+        tmp_path, {"m.py": "def call(name):\n    ...\n"}, "m.py",
+        "def call(name, args: dict[str, Any]): ...", capsys)
+    assert "proposed" in out and "adds args" in out, out

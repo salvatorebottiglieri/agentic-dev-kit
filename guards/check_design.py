@@ -167,9 +167,29 @@ def _defs_with_class(code: str) -> list[tuple[str | None, str, str]]:
     return out
 
 
+def _split_top_level(raw: str) -> list[str]:
+    """Split an argument list on the commas outside brackets and quotes: the commas in
+    `dict[str, Any]`, `(1, 2)` or `sep=","` belong to one argument."""
+    parts, depth, quote, start = [], 0, "", 0
+    for i, ch in enumerate(raw):
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(raw[start:i])
+            start = i + 1
+    parts.append(raw[start:])
+    return parts
+
+
 def tokens(raw: str) -> list[str]:
     names = []
-    for part in raw.split(","):
+    for part in _split_top_level(raw):
         t = part.split(":")[0].split("=")[0].strip()
         if not t or t in ("*", "/") or t.startswith("*") or t in ("self", "cls"):
             continue
