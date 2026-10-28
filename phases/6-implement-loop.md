@@ -33,11 +33,3 @@ Rules: the main agent orchestrates and never edits code directly; fresh
 context for every subagent; verbatim diffs to reviewers; the criteria
 family is pasted into every reviewer task — reviewers have no other
 access to it.
-
-## 7. tightrope — folded into phase 6 (2026-08-30)
-
-The tightrope tension check is no longer a separate optional pre-merge
-gate. The ponytail-vs-engineering tension is the third review axis of
-phase 6 (with user-weighted tension resolution), and its test/lint/PR gate
-is implement-loop's pre-push gate (CI-before-merge). The
-`skill://tightrope` skill is deprecated.
