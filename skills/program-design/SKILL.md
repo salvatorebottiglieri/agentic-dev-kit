@@ -150,6 +150,28 @@ Premises are not optional for designs that introduce behavior the
 team has not seen before. A refactor that only touches existing call
 graphs can skip them.
 
+#### Load-bearing decisions (D-043)
+
+A choice that changes agent behaviour, run cost, or an external contract
+(CLI argv, config keys, wire format, file layout) is a **load-bearing
+choice**. For each one, add a `## Decision` section to the design document
+(`docs/design/<feature>.md`) and to the appended `## Program Design` section,
+before you publish:
+
+```markdown
+## Decision — <short title>
+
+- **Choice**: <what the design does>
+- **Alternatives rejected**: <alternative> — <why rejected>; ...
+- **Consequences**: <agent behaviour, run cost, external contract impact>
+- **Owner sign-off**: <link to the comment where the owner approved it>
+```
+
+One section per load-bearing choice; the heading starts with `## Decision`.
+A design that makes such a choice without the section is incomplete: the Spec
+axis raises it as `fatal`, quoting the design text as evidence. If the design
+has no load-bearing choice, no `## Decision` is needed.
+
 ### 3. When to skip (classify the change)
 
 Program design runs **near-always**. Skip only when there is no *shape* to
@@ -256,6 +278,11 @@ _CLASSIFY: <change type>_
 ...
 ```
 ```
+
+If the design makes a load-bearing choice, append one `## Decision` section
+per choice (choice, rejected alternatives, consequences, owner sign-off) after
+the Program Design section; see §2. A design with such a choice and without
+the section is incomplete.
 
 Omit sections that are empty — don't produce "N/A" placeholders.
 

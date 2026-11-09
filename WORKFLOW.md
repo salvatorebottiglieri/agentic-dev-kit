@@ -72,6 +72,7 @@ reads and obeys it.
 | System Invariants each with a test that can fail | phase 3 | prompt (executed by the mutation prover) |
 | Program-design signatures are contract (I2) | phase 5 | prompt (judgment: Spec axis) |
 | The DesignDoc passes its checks (signatures, coherence, four exits, frontier) | phase 5 + pre-push | script (`guards/check_design.py`, pre-push hook) + prompt (Spec axis judges `handled_at`) |
+| Load-bearing Program Design choices carry a `## Decision` (choice, rejected alternatives, consequences, owner sign-off) — D-043 | phase 5 + phase 6 (Spec axis) | prompt (a silent load-bearing choice is `fatal` in the Spec axis; trigger: a load-bearing choice reaches a merge without `## Decision` → add `decisions[]` to the design JSON block and validate it with `guards/check_design.py`) |
 | Main agent never edits code; fresh context per subagent; verbatim diffs | phase 6 | prompt |
 | Review axes read-only; mutation prover only in a scratch worktree | `REVIEW-CRITERIA.md` | prompt |
 | Evidence quote matches the diff verbatim (criterion 4) | `REVIEW-CRITERIA.md` | script (`audit.py check_reviewer_evidence_verbatim`, every code-claim quote matched against `commit`'s diff) + prompt (`weights.Spec` axis judgment on content) |
