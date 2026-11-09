@@ -3,11 +3,11 @@
 > Part of the agentic workflow. Index and reading order: `WORKFLOW.md`. Moved verbatim from WORKFLOW.md on 2026-10-09 (R-001); only cross-file references were rewritten.
 
 A git working tree is per repo, and it is what two agentic sessions fight
-over. Observed failure (2026-09-19, `a-data-pipeline`): a second
+over. Observed failure (2026-09-19, `example-news-pipeline`): a second
 session could not change branch without moving the first session's working
 tree, `git stash` — repo-global, shared by every worktree — was cycled
 between the two, and a commit landed on the other session's feature branch
-(`handoffs/handoff-<feature>-20260919.md`, deviations 1 and
+(`handoffs/handoff-retention-righe-pipeline-20260919.md`, deviations 1 and
 4).
 
 **At most one writer per working tree.** The default is a worktree per
@@ -40,8 +40,8 @@ nobody else is there. A claim left behind by a session that died is treated
 as live: a stale claim costs a worktree, a missed collision costs a commit.
 
 **Cleanup at session end — the tree a session opens, it closes.** Worktrees
-accumulate: observed 2026-09-21 on `a-shared-lib`, nine of them
-(`handoff-<feature>-20260921.md`, deviation 3), every one a false
+accumulate: observed 2026-09-21 on `example-lib`, nine of them
+(`handoff-s3-checkpoint-offload-20260921.md`, deviation 3), every one a false
 "the repo is shared" signal for every later session, which then isolates for
 nothing. **Two species, and the rule covers both:**
 

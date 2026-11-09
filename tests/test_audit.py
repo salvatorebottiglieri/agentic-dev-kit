@@ -34,12 +34,12 @@ from audit import (
     gather_prs,
 )
 
-# Real commit from BranchToast/branchtoast-news-pipeline, where the fallback
+# Real commit from example/example-repo, where the fallback
 # was needed (a fine-grained PAT without check-run access).
 SHA = "0887aaea7ae21185fee524a59facc500e43465f3"
 
 #: I9 is scoped per project: only handoffs declaring this repo are read.
-REPO = "BranchToast/branchtoast-news-pipeline"
+REPO = "example/example-repo"
 
 
 def _handoff(text: str, name: str = "h.md", repo: str | None = REPO) -> dict:
@@ -264,20 +264,20 @@ def test_followups_tracked_section_scope_ends_at_the_next_heading():
 def test_handoff_repo_reads_the_declared_field():
     """The accepted forms of the field, and — just as important — a heading
     that mentions the repo without declaring it (which parses to None)."""
-    assert audit._handoff_repo("- **Repo**: BranchToast/x\n") == "BranchToast/x"
+    assert audit._handoff_repo("- **Repo**: Example/x\n") == "Example/x"
     assert audit._handoff_repo("Repo: owner/name\n") == "owner/name"
     assert audit._handoff_repo("**repo:** owner/name (audited)\n") == "owner/name"
-    assert audit._handoff_repo("## Repo state\nBranchToast/branchtoast-x\n") is None
+    assert audit._handoff_repo("## Repo state\nExample/example-x\n") is None
 
 
 def test_followups_tracked_ignores_handoffs_of_another_repo():
     """The third false-positive class (2026-09-19): the corpus of handoffs is
-    shared by every project, the tracker is not. The domus_vault handoff
+    shared by every project, the tracker is not. The example-project handoff
     citing its own #319 resolves at home and must not be judged here."""
     handoffs = [_handoff(
         "Closes #316 #317 #318 #319\n- Advisory: legacy note, already tracked\n",
         name="handoff-diario-mockup-fidelity-20260917.md",
-        repo="salvatorebottiglieri/domus_vault",
+        repo="salvatorebottiglieri/example-project",
     )]
     assert check_followups_tracked(handoffs, {270}, REPO) == []
 
@@ -306,7 +306,7 @@ def test_followups_tracked_skips_a_handoff_declaring_no_repo():
 def test_followups_tracked_matches_the_repo_slug_case_insensitively():
     """GitHub slugs are case-insensitive, so the field comparison is too."""
     handoffs = [_handoff("Advisory: follow-up to open (#99999)\n",
-                         repo="branchtoast/BRANCHTOAST-NEWS-PIPELINE")]
+                         repo="example/EXAMPLE-REPO")]
     violations = check_followups_tracked(handoffs, {270}, REPO)
     assert violations and "#99999" in violations[0]
 
@@ -814,7 +814,7 @@ def test_audit_in_handoff_compliant():
     """The latest handoff cites the audit.py --repo command."""
     handoffs = [{
         "name": "h-20261017.md",
-        "text": "## Verification\n\n`python ~/agentic-workflow/audit.py "
+        "text": "## Verification\n\n`python ~/agentic-dev-kit/audit.py "
                 "--repo owner/foo`\n",
     }]
     assert check_audit_in_handoff(handoffs) == []

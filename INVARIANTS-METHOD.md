@@ -1,7 +1,8 @@
 # Invariants Method — theory and process
 
 > How to define a system's invariants and use them to make tests effective.
-> Method distilled from a real stress campaign and integrated into the
+> Method distilled from the example stress campaign (see
+> `CASE-STUDY-MEMEX.md` for the full application) and integrated into the
 > workflow: the `## System Invariants` section produced by
 > system-architecture and consumed by implement-loop.
 >
@@ -47,7 +48,7 @@ true, covers everything.
 
 ## 2. Why the bugs lived at the boundaries (seam theory)
 
-All 4 bugs found in the example-project campaign — every one — lived at the
+All 4 bugs found in the example campaign — every one — lived at the
 **boundaries** of the system, not in its core:
 
 - **Plugin seam** (agent): whoever writes a plugin can return anything. The

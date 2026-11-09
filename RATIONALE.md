@@ -1,54 +1,10 @@
-# Workflow Design Rationale — why the workflow is shaped this way
+# Rationale — public decision register
 
-> The workflow's **memory of why**. WORKFLOW.md states the rules; this
-> document states the reasons behind the load-bearing ones — the failure,
-> observation, or tradeoff each rule answers. Rules without a rationale here
-> are orphans: they will be followed blindly or dropped without a trace.
-> Date: 2026-08-16.
-
----
-
-## Sync contract (keep this aligned)
-
-- **Every change to WORKFLOW.md that adds, alters, or removes a load-bearing
-  rule → a decision entry here, in the same session**, citing the rule
-  location. No orphan rules.
-- **Every decision entry cites its rule location** (WORKFLOW.md section or
-  skill) and its source (handoff, commit, issue).
-- WORKFLOW.md's General rules points to this document (two-way link).
-- **Since 2026-10-09 (R-001) WORKFLOW.md is an index.** In this contract
-  "WORKFLOW.md" means the index *and* every file it points to. Entries
-  written before that date are not rewritten — they cite the location at the
-  time, which maps as: "WORKFLOW.md phase N" → `phases/N-*.md` (phase 4 stays
-  in the index; the phase-7 note is in `phases/6-implement-loop.md`);
-  "`## Review criteria family`" → `REVIEW-CRITERIA.md`; "Session isolation"
-  → `SESSION-ISOLATION.md`; "General rules" and "Workflow invariants" stay
-  in `WORKFLOW.md`.
-- Append new decisions with the next `D-###` id; revise an existing decision
-  in place when the rule changes, keeping the date.
-- The enforcement layer is INVARIANTS.md + audit.py; this document is the
-  memory layer — a change without an entry is a drift, not a violation
-  (yet).
-
-## The pipeline at a glance
-
-Five phases of design/alignment, then implement-loop. Why: the BASELINE
-(Pocock flow) went straight from conversation to implementation — design
-decisions were made implicitly, code shape was discovered during
-implementation, and nothing was visualized before architecture. The review
-inside implement-loop now carries the ponytail-vs-engineering tension
-(third axis + user-weighted resolution), and the pre-push gate runs the
-canonical test/lint/CI — the separate tightrope gate is folded in.
-TARGET.md records the evolution; this document records the reasons.
-
----
+Generated from the canonical workflow source by `sync_kit.py`.
+Each entry keeps the decision and its rationale; the private session evidence stays in the canonical repository.
 
 ## D-001 — Phase 6: the main agent orchestrates and never edits code (2026-08-03)
 
-- **Context.** The implement-loop rule that the main agent orchestrates and
-  never edits code directly is load-bearing but has no decision entry — it
-  predates RATIONALE.md and was excluded from INVARIANTS.md only because no
-  corpus trace records it ("Not auditable", not "not a rule").
 - **Decision.** WORKFLOW.md phase 6: the main agent orchestrates; subagents
   implement with TDD and fresh context; reviewers see verbatim diffs and
   the criteria family (D-004). The main agent never edits code directly.
@@ -58,17 +14,9 @@ TARGET.md records the evolution; this document records the reasons.
   what keeps the criteria family (D-004) independent of the code it judges.
   It is a process rule, not an invariant — unverifiable from traces by
   design, which is why it lives here and not in INVARIANTS.md.
-- **Rule location.** WORKFLOW.md phase 6.
-- **Source.** WORKFLOW.md phase 6 (commit `75a62a6`); INVARIANTS.md
-  "Not auditable (excluded from codification)".
 
 ## D-002 — Every session ends with the transversal gate: audit + handoff (2026-08-05)
 
-- **Context.** The pre-invariant workflow ended sessions with no verifiable
-  trace: the 4 example-service handoffs existed but lived on the Desktop,
-  outside version control — the gap was the location, not the existence
-  (I5 evidence). Work done outside the pipeline — local design docs,
-  direct commits, exploration — was invisible to any tracker-based check.
 - **Decision.** WORKFLOW.md General rules: every session, including
   exploration-only ones, ends with (1) `python ~/agentic-dev-kit/audit.py
   --repo <owner/repo>` reported in the final message and (2) a git-committed
@@ -88,18 +36,9 @@ TARGET.md records the evolution; this document records the reasons.
   3. **Audit + mutation tests keep the invariants honest** — an audit
      whose checks cannot fail is decoration; anti-vacuity is what makes the
      gate load-bearing rather than ritual.
-- **Rule location.** WORKFLOW.md `## General rules` (transversal gate),
-  `## Workflow invariants (transversal)` (I1–I6).
-- **Source.** Commits `bb3f634`, `97dcbbf`, `8aeed10`, `43c5575`;
-  `INVARIANTS.md` I5; `INVARIANTS-METHOD.md` §6.
 
 ## D-003 — Phase-3 skip criteria judge domain value, not diff shape (2026-08-06)
 
-- **Context.** The system-architecture skip list (`mechanical refactor`,
-  `follows existing pattern`) silently dropped the phase's invariant-
-  elicitation output: refactors of modules with real domain laws (status
-  machine, quota, outbox, graph cascade) shipped without a
-  `## System Invariants` section (INVARIANTS.md Evolution).
 - **Decision.** Those two skip types still skip the diagrams and endpoint
   contracts, but the `## System Invariants` section survives the skip — in
   reduced form (law → negation → where verified) whenever the touched
@@ -110,22 +49,12 @@ TARGET.md records the evolution; this document records the reasons.
   writes those tests first, the Spec review verifies coverage). A
   mechanical refactor of a module with laws is precisely where regression
   tests matter — the skip was protecting against bureaucracy and throwing
-  away the one artifact that pays for the phase. The example-project campaign showed
+  away the one artifact that pays for the phase. The example campaign showed
   bugs live at boundaries and in triplicated logic; refactors touch exactly
   those.
-- **Rule location.** WORKFLOW.md phase 3.
-- **Source.** Commit `371d3da`; `INVARIANTS.md` "Evolution (TARGET)";
-  `INVARIANTS-METHOD.md` §6.
 
 ## D-004 — Reviews and gates are families of small orthogonal criteria (2026-08-16)
 
-- **Context.** The example-project session (issue #145) showed a monolithic
-  adversarial judge failing: one prompt, several vague overlapping
-  questions, one boolean verdict — it rationalized bad outputs because the
-  criteria were fuzzy and circular ("supported by the body's reasoning"
-  while the body itself was ungrounded). The handoff generalized this into
-  a family of small criteria; this session reviewed it and corrected it
-  before codifying.
 - **Decision.** Phases 6–7 and the review skills (code-review,
   implement-loop, tightrope) run as criteria families: defined scope,
   falsifiable per-item question, pre-sliced evidence, structured finding
@@ -134,31 +63,9 @@ TARGET.md records the evolution; this document records the reasons.
   Taxonomy is owned by `WORKFLOW.md → ## Review criteria family`; the skills
   reference it. Criteria are codified, not invented — no new criteria were
   added beyond what already existed.
-- **Rationale (the three load-bearing whys).**
-  1. **Evidence must be verifiable** — an LLM that hallucinates a claim can
-     hallucinate the supporting quote; "no evidence = not accepted" is
-     bypassed with fake evidence. The deterministic quote-match check is the
-     cheapest member and the only one that keeps LLM evidence honest.
-  2. **Orthogonality is not the mechanism — dependency order is.** V2's
-     circularity is fixed by V1 grounding the body first and V2 consuming
-     V1's verdicts. The family is a DAG, not a flat fan-out; "parallel
-     per-rule calls" would let the circularity back in.
-  3. **The gate must not be all-or-nothing** — a binary accept/reject gate
-     cries wolf, gets ignored, and recreates the problem it solves. Severity
-     + partial-failure thresholds keep the existing pass-with-warning path.
-- **Rule location.** WORKFLOW.md `## Review criteria family`, phases 6–7;
-  skills: code-review (`## Criteria family`), implement-loop (reviewer
-  briefs), tightrope (tension check).
-- **Source.** `handoffs/handoff-adversarial-validation-20260816.md` (rev. 2,
-  corrections [1]–[6]); `handoffs/handoff-review-criteria-family-20260816.md`;
-  commits `5867fa1`, `7d7601d`.
 
 ## D-005 — Phase-2 (product-review) decisions are pronounced in session (2026-08-16)
 
-- **Context.** The user observed that product review never surfaces in
-  sessions. Root cause: example-project is backend-only — no UI surfaces in the repo —
-  so phase 2 is legitimately skipped on every feature; but the skip was
-  silent in conversation, annotated only on the tracker (I3).
 - **Decision.** WORKFLOW.md phase 2 carries a visibility rule: the phase-2
   decision is always stated in the session — "Phase 2 — product review:
   run" or "Phase 2 skipped — <reason> (annotation on the ticket)". A skipped
@@ -167,16 +74,9 @@ TARGET.md records the evolution; this document records the reasons.
   trust or challenge. The phase was working correctly (skip criteria were
   applied, I3 annotations written); the failure was visibility, not logic —
   so the fix is a spoken line, not a process change.
-- **Rule location.** WORKFLOW.md phase 2.
-- **Source.** `handoffs/handoff-review-criteria-family-20260816.md`;
-  TARGET.md row 14.
 
 ## D-006 — Pocock skills refreshed from upstream; local edits re-applied (2026-08-16)
 
-- **Context.** Installed Pocock skills were from 2026-07-31/08-03; upstream
-  `mattpocock/skills` HEAD `068b6e0` (2026-08-15) had evolved in all 18
-  matching skills. The criteria-family edits in code-review were the only
-  local customization.
 - **Decision.** (a) Update the 18 Pocock skills to upstream HEAD; (b)
   re-apply the 5 criteria-family edits onto the new code-review base
   (verified: installed-vs-upstream diff is exactly those edits); (c) install
@@ -191,19 +91,9 @@ TARGET.md records the evolution; this document records the reasons.
   skill. No registry creep: the two skipped installs would duplicate roles
   already filled. Pre-update backup:
   `~/Desktop/skills-backup-20260816.tar.gz`.
-- **Rule location.** `~/.claude/skills/` (not git-versioned — deviation
-  documented in the handoff); BASELINE.md installed-skills map.
-- **Source.** `handoffs/handoff-review-criteria-family-20260816.md`;
-  commits `6a22178`, `fb41a75`, `e84133a`.
 
 ## D-007 — Anti-AI-look baseline in the review family (2026-08-28)
 
-- **Context.** UI reviews had no criterion for the "generated-by-AI" defect
-  class: default purple/indigo gradient heroes, centered glassmorphism
-  cards, near-identical card rows, filler copy. The class is real and
-  observed — it is the entire premise of the jam.with.ai reel on Claude
-  Code UI work (this session), and the mockup rules in product-review
-  offered no guardrail against it.
 - **Decision.** WORKFLOW.md `## Review criteria family` — code-review
   Standards axis gains (c) anti-AI-look baseline: UI diffs only, advisory
   severity, overridden by a documented design standard or per-project
@@ -216,22 +106,9 @@ TARGET.md records the evolution; this document records the reasons.
   pass-with-warning path — an anti-AI-look verdict should never block a
   correct feature. The override rule matters: a repo with explicit design
   tokens already answers the question the baseline asks.
-- **Rule location.** WORKFLOW.md `## Review criteria family` (Standards
-  axis (c)); product-review SKILL.md Section C.
-- **Source.** Session 2026-08-28 (reel `DcjEohigobV` analysis);
-  `agentic-dev-kit` commit (this session).
 
 ## D-008 — Persona × edge-case simulation in UI phases (2026-08-28)
 
-- **Context.** UI success criteria were derived from stories alone — no
-  obligation to cover distinct personas or the edge-case states (empty,
-  error, loading, long content, small viewport) — and implement-loop had no
-  usability verification step: the harness rule says "browser-drive a UI
-  change", but nothing required personas or edge cases, so verification
-  defaulted to a visual once-over. The reel's author calls her custom
-  "simulation" pass — test different edge cases, different user types,
-  actually use the site in Chrome — the most important part of her Claude
-  Code UI workflow.
 - **Decision.** (a) WORKFLOW.md phase 2: product-review success criteria
   must cover every distinct persona (≥1 checkable criterion each) and the
   edge-case states; the mockup renders those states. (b) WORKFLOW.md phase
@@ -246,20 +123,9 @@ TARGET.md records the evolution; this document records the reasons.
   applied to UI: a visual confirmation is not proof of usability, an
   exercised persona scenario is. It reuses the existing fix loop, so it
   adds no new machinery.
-- **Rule location.** WORKFLOW.md phase 2, phase 6; product-review SKILL.md
-  Section B; implement-loop SKILL.md step 5 + completion criteria.
-- **Source.** Session 2026-08-28 (reel `DcjEohigobV` analysis);
-  `agentic-dev-kit` commit (this session).
-
----
 
 ## D-009 — Program design runs near-always (2026-08-30)
 
-- **Context.** The user observed that program design almost never fires.
-  Root cause: the skip list (`bug fix`, `mechanical refactor`, `trivial
-  feature`, `one-shot`) covered most real work, so the phase was skipped by
-  default. This mirrors D-005's diagnosis (product-review never surfaced),
-  but the cause here is the skip criteria themselves, not visibility.
 - **Decision.** WORKFLOW.md phase 5 + program-design SKILL.md §3: skip only
   when there is no *shape* to design — one-shot throwaway scripts, pure
   config/data changes that introduce zero new signatures, mechanical
@@ -274,17 +140,9 @@ TARGET.md records the evolution; this document records the reasons.
   one function has no shape, but a "trivial" feature that adds a route and
   a type does. Keying on shape, not kind, makes the phase near-always
   without making it bureaucratic.
-- **Rule location.** WORKFLOW.md phase 5; program-design SKILL.md §3.
-- **Source.** User request 2026-08-30.
-
----
 
 ## D-010 — Tightrope folded into the review: ponytail axis + tension resolution (2026-08-30)
 
-- **Context.** tightrope was an optional pre-merge gate; the user wanted the
-  ponytail-vs-engineering criteria to live in the review itself, not as an
-  optional final step — with the user deciding the weight between the two
-  axes and the reviewer escalating ambiguous tensions.
 - **Decision.** WORKFLOW.md phase 7 removed; phase 6 review gains the
   **ponytail axis** (delete-list via `/ponytail-review`) as a third
   orthogonal axis alongside Standards + Spec, plus a **tension-resolution**
@@ -305,18 +163,9 @@ TARGET.md records the evolution; this document records the reasons.
   3. **Weighting keeps the pass-with-warning path** — lean auto-resolves,
      balanced escalates, so the human controls the default instead of
      inheriting an all-or-nothing gate.
-- **Rule location.** WORKFLOW.md phase 6, phase 7, `## Review criteria
-  family` (ponytail axis, tension resolution); implement-loop SKILL.md step 2.
-- **Source.** User request 2026-08-30.
-
----
 
 ## D-011 — Pre-push gate (test/lint/CI) moves into implement-loop (2026-08-30)
 
-- **Context.** Removing tightrope would drop its one capability that nothing
-  else owned: running the canonical test/lint over the whole repo before the
-  PR, and holding the PR to CI green. Backlog B-002 had already designed
-  exactly this gate for implement-loop; this session implements it.
 - **Decision.** implement-loop gains step 6 (pre-push gate): canonical
   full-suite test + lint; red → fixer subagent → re-review → re-run the gate.
   Step 7 (PR) now blocks on CI green before the item is declared done.
@@ -328,20 +177,9 @@ TARGET.md records the evolution; this document records the reasons.
   implement-loop (mandatory, not optional) keeps the capability while
   removing the optional-gate failure mode. Blocking on CI green closes the
   loop — the gate must be mandatory, not best-effort (D-002).
-- **Rule location.** implement-loop SKILL.md steps 6–7; WORKFLOW.md phase 6.
-- **Source.** User request 2026-08-30; BACKLOG.md B-002.
-
----
 
 ## D-012 — "Session" means the whole conversation: the gate runs at the end (2026-09-11)
 
-- **Context.** In the session of 2026-09-11 the assistant read "Every session
-  **ends** with the transversal gate" as "after each turn" and, following a
-  single status question, ran `audit.py` and committed
-  `handoff-diario-status-20260911.md`. The conversation continued immediately
-  into the design phases, which made that handoff wrong on arrival: it declared
-  "next session: grilling" while the grilling was starting in the same session.
-  The premature commit was dropped (it had never been pushed).
 - **Decision.** WORKFLOW.md General rules states explicitly that a session is
   the whole conversation, not a turn: the gate runs once, at the end, and never
   mid-session.
@@ -352,23 +190,9 @@ TARGET.md records the evolution; this document records the reasons.
   conversation contains many natural stopping points that look like endings.
   The user's correction was the signal: the rule was being read literally
   against its intent.
-- **Rule location.** WORKFLOW.md General rules — the transversal-gate bullet
-  and the clarification beneath it.
-- **Source.** User correction, session 2026-09-11 (*"si ma è obbligatorio alla
-  fine, no?"*).
 
 ## D-013 — Phase 1 falsifies the spec's premises before publishing (2026-09-11)
 
-- **Context.** Epic #263 ("Diario della Casa") was written from an external
-  product spec, and its Contesto asserted two things about this codebase —
-  **both false**: that `asset_events`/`house_events` were read-only system audit
-  logs, and that the Diario would be the first user-facing timeline. In fact the
-  user already wrote into those logs (the `user_note` event type has full CRUD)
-  and a merged, cursor-paginated timeline already existed behind the
-  `HistoryRoot` seam, exposed as the house *History* tab. The grilling round
-  found it, and killing the premise **changed the design**: the decision that
-  the Diario is the *existing* surface plus a fourth source — not a new view —
-  exists only because the false premise died.
 - **Decision.** Phase 1 has an explicit closing step: state the spec's claims
   about the current codebase as falsifiable statements and dispatch a scout to
   refute them *before* the spec is published.
@@ -379,34 +203,9 @@ TARGET.md records the evolution; this document records the reasons.
   design plus everything built on it. Where the premise asserts an *absence*
   ("nothing enforces this", "this surface does not exist"), the refutation is a
   search — cheap, decisive, and exactly what was skipped here.
-- **Rule location.** WORKFLOW.md phase 1.
-- **Placement (decided 2026-09-11).** The rule lives in WORKFLOW.md phase 1 —
-  the file every session is instructed to follow as the canonical reference.
-  Two alternatives were considered and **deferred, not rejected**: patching the
-  installed copy of the upstream phase-1 skills (`~/.claude/skills/`, not under
-  version control, lost on reinstall, diverging from upstream with no record),
-  and forking phase 1 into `~/agentic-dev-kit/` (which takes on maintenance of skills
-  that are not ours). Both close the residual gap — an agent that reads only
-  the skill it is about to execute never sees this rule — at a cost the
-  evidence does not yet justify: the observed failure was *"the rule did not
-  exist"*, and since 2026-09-11 it does. **Escalation trigger:** the first
-  session that publishes a spec carrying an unverified premise about the code
-  escalates to the patch (cheap) or the fork. Same criterion as I8 — a defence
-  is added when the failure is observed, not when it is hypothesised.
-- **Source.** Session 2026-09-11; epic #263 → spec #274; the ADR-0016
-  "same surface" decision.
 
 ## D-014 — Three new invariants: gates in CI, follow-ups tracked, commands quoted (2026-09-11)
 
-- **Context.** On 2026-09-11 the audit reported *"ok — all workflow invariants
-  hold"* for `example-service` while that repo declared `[tool.mypy] strict = true`
-  and ran **no mypy and no ruff in CI**: 274 errors had accrued, one of them a
-  real bug (`graph/backfill.py` called an async pool-init without `await`, so
-  the script had never been executable). **I1 was being satisfied vacuously** —
-  a CI that runs no gates is always green. Separately, four consecutive
-  handoffs asserted *"ruff/mypy: 0 new errors on touched files"* with no command
-  behind the claim, and untracked advisories had already produced a real
-  violation once (the evidence that removed I7).
 - **Decision.** Three invariants with checks and mutation tests: **I8** (every
   gate a repo configures is executed by CI), **I9** (a follow-up named in a
   handoff carries a resolving tracker reference, windowed to the recent
@@ -425,26 +224,9 @@ TARGET.md records the evolution; this document records the reasons.
   command produced the reported result. A stronger version would have to parse
   outcomes and would be unfalsifiable — the weak version fails on exactly the
   observed failure mode, which is the test it has to pass.
-- **Rule location.** INVARIANTS.md I8/I9/I10; `audit.py`
-  `check_configured_gates_run_in_ci` / `check_followups_tracked` /
-  `check_handoffs_quote_commands`; `tests/test_audit.py`.
-- **Source.** Session 2026-09-11; #282 (the typing debt and its diagnosis),
-  PR #287 (the backfill fix), #286 (the tracked non-blocking follow-ups).
-
----
 
 ## D-015 — I9 reads *named* follow-ups, not words: label or follow-up section (2026-09-17)
 
-- **Context.** Closing the Diario session on 2026-09-17 the audit reported
-  `[I9] handoff-diario-verification-20260917.md:23 names a follow-up with no
-  tracker reference` for a line describing work **delivered** in that session,
-  whose tail read *"solo un'osservazione advisory sull'indicatore della tab
-  attiva"*. Nothing in it is a follow-up. **An hour later the same check fired
-  again on the handoff written to record the first fix**, this time on
-  *"I9 smette di leggere un severity come follow-up"* — the other marker word,
-  in a stanza about the invariant itself. Two false positives, two markers:
-  the defect was not that `advisory` is ambiguous, it is that the check matched
-  a word *containing* a line instead of a line *labelling* something.
 - **Decision.** "Named" becomes two shapes, neither of which is prose: (a) a
   marker labels the line — optional bullet, number, `>` or bold, then
   `advisory` / `follow-up` / `non bloccante` — anywhere in the document; (b) any
@@ -468,29 +250,9 @@ TARGET.md records the evolution; this document records the reasons.
   real pending item losing its check). Non-vacuity measured, not assumed: 9 of
   the 25 current violations come from a labelled line and 16 from inside a
   section, so both halves fire on the real corpus.
-- **Rule location.** INVARIANTS.md I9 (clause + evidence); `audit.py`
-  `check_followups_tracked`; `tests/test_audit.py` (5 mutation tests: both
-  observed false positives, the anchored bullet, the unbolded heading, prose
-  inside a follow-up section, and the section boundary ending at the next
-  heading).
-- **Source.** Session 2026-09-17 (example-service Diario, PR #320). The
-  workaround used before the fix — rewording a handoff to avoid a bare word —
-  is what a heuristic forces when it cannot tell a label from a word.
 
 ## D-016 — I9 is scoped to the project: the handoff declares its repo (2026-09-19)
 
-- **Context.** The corpus in `~/agentic-dev-kit/handoffs/` is shared by every
-  project, while `gather_known_refs(repo)` resolves `#N` against the repo
-  passed to `--repo`. So I9 judged other projects' handoffs against this
-  project's tracker: on 2026-09-19
-  `python3 audit.py --repo Example/a-data-pipeline` reported
-  `[I9] handoff-diario-mockup-fidelity-20260917.md:41 cites follow-up #319,
-  which does not resolve on the tracker` — `#319` is a ticket of
-  `Example/example-service`, closed by that project's PR #320. The
-  defect was invisible on the Example side because the audit aborted
-  earlier, in `gather_prs`, on a token without check-run access: the I1
-  fallback on the Actions channel (`73a362c`) let the audit reach its end for
-  the first time, and I9 spoke the moment it could.
 - **Decision.** A handoff **declares the repo it concerns** — a `Repo:` line,
   one slug, canonical form `- **Repo**: owner/name` (WORKFLOW.md) — and I9
   reads only the handoffs declaring the audited repo (comparison
@@ -514,40 +276,9 @@ TARGET.md records the evolution; this document records the reasons.
   other 4) and from the filename prefix (`handoff-<feature>-…` has no defined
   mapping to a repo — the Example handoff carries the org name, not the
   repo name).
-- **Rule location.** WORKFLOW.md (handoff content: the repo declaration);
-  INVARIANTS.md I9 (verification scope, clause, evidence — third
-  false-positive class with the measurements); `audit.py` (`HANDOFF_REPO_RE`,
-  `_handoff_repo`, `gather_handoffs`,
-  `check_followups_tracked(handoffs, known_issues, repo)`);
-  `tests/test_audit.py` (5 new mutation tests + the 9 existing ones updated to
-  declare the repo; neutralising the filter turns 2 of them red — verified).
-- **Source.** Session 2026-09-19 (Example news pipeline). The false
-  positive surfaced within minutes of the audit becoming runnable, and the fix
-  is why the audit now exits 0 on that repo instead of blaming another
-  project for its own refs.
-
----
 
 ## D-017 — Session isolation: one writer per working tree (2026-09-20)
 
-- **Context.** Git's working tree is per repo, and no rule claimed it.
-  Worktrees were named in exactly two places — `implement-loop` §0 and its
-  "Dependency resolution" section ("run independent items in parallel in
-  separate git worktrees", agentic-dev-kit) and one line of `BASELINE.md`
-  ("sequential or parallel with `worktree: true`") — with no entry in this
-  document and no mention in `WORKFLOW.md`: an orphan rule, and the corpus
-  shows it was followed accordingly. The parallel batch of 2026-08-06 ran
-  four implement subagents on one working tree
-  (`handoff-invariant-gaps-20260806.md:29`), and the case the rule existed
-  for — two sessions on `a-data-pipeline`, 2026-09-19 — went to
-  `git stash` instead: one session could not change branch without moving the
-  other's working tree, two stashes were cycled between them, and a commit
-  landed on the other session's branch
-  (`handoff-<feature>-20260919.md`, deviations 1 and 4). The
-  premise behind the status quo ("worktrees are already used") was falsified
-  before writing anything: the only real worktrees in the 73-handoff corpus
-  are incidental — a session launched in one, `/tmp` probe worktrees
-  since removed.
 - **Decision.** At most one session writes per working tree. A session
   entering a repo reads three observable signals — dirty primary tree with
   work it did not produce, another worktree of the repo, a live claim — and
@@ -581,40 +312,9 @@ TARGET.md records the evolution; this document records the reasons.
   session that dies before removing its claim makes the next session isolate
   needlessly — accepted, and asymmetric on purpose, a worktree against a lost
   commit.
-- **Rule location.** `WORKFLOW.md` ("Session isolation — one writer per
-  working tree"); `~/.pi/agent/AGENTS.md` (pi mechanism: cwd is fixed at
-  launch, so the worktree is the session's launch directory or is addressed
-  explicitly — harness config, deliberately not in `WORKFLOW.md`);
-  `INVARIANTS.md` ("Not auditable", why this carries no check); the
-  item-parallelism line in `implement-loop` (agentic-dev-kit) is unchanged and
-  still valid — it isolates *items* within one session, this rule isolates
-  *sessions* from each other.
-- **Source.** Session 2026-09-20 (workflow repo). Evidence: the 2026-09-19
-  retention handoff (deviations 1 and 4), `handoff-invariant-gaps-20260806.md`,
-  and a grep of the whole workflow + skills corpus for `worktree`, which
-  found the two orphan mentions and no rationale. The structural half of the
-  rationale was verified on a scratch repo, not asserted: `git rev-parse
-  --git-common-dir` resolves to the same directory from the primary tree
-  (`.git`) and from a worktree (`<primary>/.git`), and `git checkout feat-x`
-  in the second tree → `fatal: 'feat-x' is already used by worktree at
-  '<path>'`.
-
----
 
 ## D-018 — Worktrees are cleaned at session end, on evidence (2026-09-21)
 
-- **Context.** D-017 told a session when to *open* a worktree and said nothing
-  about closing one. Observed the same month on `a-shared-lib`
-  (`handoff-<feature>-20260921.md`, deviation 3): **nine** stale
-  worktrees, all under `.claude/worktrees/agent-<hash>` — not created by D-017
-  at all, but by the agent harness, and **nested inside the repo**, which is
-  exactly what D-017 forbids its own worktrees from doing. The cost is not
-  disk: "another worktree of the repo" is one of D-017's three isolation
-  signals, so every one of them makes every later session read the repo as
-  shared and isolate for nothing — a rule whose own residue triggers itself.
-  Four of the nine were not free to drop: one carried a commit not reachable
-  from `develop` (`b04d4bc`, ADR-0012 slice 3) and three had uncommitted June
-  work, which is why "just prune them" was not the answer.
 - **Decision.** Step (4) of the session-end gate. The session's own worktree
   is always dealt with — removed when the tree is clean and `HEAD` is an
   ancestor of the base, otherwise left and named in the handoff. Another
@@ -641,30 +341,9 @@ TARGET.md records the evolution; this document records the reasons.
   for `b04d4bc` and turned out true only because it was checked against
   `develop` — the rule therefore says verify, not assume, and keeps the patch
   either way.
-- **Rule location.** `WORKFLOW.md` ("Session isolation — Cleanup at session
-  end", and step (4) of the transversal gate under General rules);
-  `INVARIANTS.md` ("Not auditable", extending D-017's row).
-- **Source.** Session 2026-09-21 (`a-shared-lib`, S3 checkpoint offload
-  design). Evidence: `git worktree list` on that repo (nine entries),
-  per-worktree `git status --porcelain` and `git merge-base --is-ancestor`
-  against `develop`, and the confirmation that `b04d4bc`'s content had in fact
-  shipped (`_strip_lc_messages` / `_marshal_lc_messages` present in
-  `develop`'s `conversation/aws.py` and `local.py`). The nine were removed in
-  that session, branches included, following the procedure this entry
-  codifies.
 
 ## D-019 — Invariant coverage is proven by an executed mutation, not by reading the diff (2026-09-24)
 
-- **Context.** Session 2026-09-24, implement-loop run. The code under review
-  was correct: `version = raw[COL_VERSION]` did the right thing from the
-  first commit. What was missing was the **proof that it stays** correct —
-  the existing test exercised that line with the value `"1.0.0"`, on which
-  the rule is invisible: every plausible wrong implementation (normalise,
-  strip, coalesce a default, read a sibling column) returns `"1.0.0"` too.
-  The test was green under the correct implementation *and* under the wrong
-  one. The gap was found only when the workflow owner ran the mutation by
-  hand; both reviewers had read the same diff and neither could see it,
-  because **a blind test reads exactly like a discriminating one**.
 - **Decision.** Two rules, one at each end of phase 6. (1) **Witness value**
   (implement-loop step 1): for every invariant the implementer states the
   input on which the correct and the plausible-wrong implementation
@@ -703,24 +382,9 @@ TARGET.md records the evolution; this document records the reasons.
      covered; (b) full mutation-testing frameworks (`mutmut`, `cosmic-ray`)
      — minutes-to-hours per run and a mutant list dominated by noise, where
      the targets here are already enumerated by the spec's invariants.
-- **Rule location.** `WORKFLOW.md` (`## Review criteria family`: criterion 4,
-  Spec axis (d), the "mutation prover" member; phase 6 bullet list);
-  `implement-loop` SKILL.md (step 1 witness value, step 2b, completion
-  criterion).
-- **Source.** Session 2026-09-24, implement-loop run; defect observed by the
-  loop manager agent and confirmed by the workflow owner running the
-  mutation manually.
 
 ## D-020 — A reviewer answers every item of its brief; the orchestrator checks coverage mechanically (2026-09-24)
 
-- **Context.** Same session, 2026-09-24. Two reviewer failures of opposite
-  sign, both invisible in the report itself. The **Standards** axis never
-  mentioned ADR-0013 — *which was in its own brief*: a silent false
-  negative. The **Spec** axis claimed the invariant had no coverage at all,
-  when a test existed and merely failed to discriminate: a true finding
-  reported at the wrong weight. Both findings were valid in substance; the
-  reports misrepresented their weight, and nothing in the output made either
-  error detectable without redoing the review.
 - **Decision.** Criterion 7 of the review criteria family: the report
   carries **one line per item of the pre-sliced brief** (each standards file
   and ADR named, each `- [ ]` acceptance criterion, each invariant), with an
@@ -746,27 +410,32 @@ TARGET.md records the evolution; this document records the reasons.
      failure was an omission under a long brief, not a capability limit;
      (c) an `audit.py` check — reviewer reports are not tracker artifacts,
      so it would be unfalsifiable (`INVARIANTS.md`, "Not auditable").
-- **Rule location.** `WORKFLOW.md` (`## Review criteria family`: criterion 7,
-  Standards axis preamble; phase 6 bullet "the reviewers are verified like
-  the code"); `implement-loop` SKILL.md (step 2, "Verify the reviewers like
-  the code", and the completion criterion).
-- **Source.** Session 2026-09-24, implement-loop run; both reviewer errors
-  reported by the loop manager agent.
+
+## D-021 — Skills live in one agent-neutral store, not one copy per agent (2026-10-11)
+
+- **Decision.** `~/.agents/skills/` is the single, agent-neutral store. The
+  custom skills are installed there from a clone of `agentic-dev-kit`
+  (`AGENT_SKILLS_DIR=~/.agents/skills ~/agentic-dev-kit/install.sh`, symlinks
+  to the clone — the clone stays the one source). An agent that reads its own
+  directory is pointed into the store by a symlink (`~/.claude/skills/<name>`
+  → `../../.agents/skills/<name>`), never installed a second time.
+- **Rationale.** One store makes "which version is the agent actually
+  reading" answerable with one command; with a copy per agent it is not, and
+  staleness stays invisible until a rule silently differs from the doc — the
+  failure observed here. It is also the agent-agnostic constraint applied to
+  installation: naming one vendor's directory as canonical turns a process
+  document into a Claude Code document, and every other agent then gets a
+  copy that drifts. Correcting the path in the doc is not enough on its own:
+  a pointer is only true if the install target it names is the one populated.
 
 ## D-022 — Facts the review needs are computed by a tool into the commit, not reported by the agent (2026-10-13)
 
-- **Context.** In an A/B replay of the workflow (round 1, 2026-10-12) the
-  variant with textual reporting rules wrote the requested labels every time,
-  yet missed the actual facts (e.g. which tests were skipped) as often as the
-  variant without those rules. A check verifying that the labels are present
-  would have passed the same runs: the rules shaped the form of the report,
-  not its content.
 - **Decision.** A git pre-commit hook (`guards/gate.py`, installed with
-  `install.sh --gate <repo>`) computes the facts — first the skipped tests,
-  read from the JUnit report of the configured test command — and stages
-  them into the same commit as `.workflow/gate-report.md`. It blocks the
-  commit only when it cannot run — the causes are listed in README
-  § "Pre-commit gate"; inconclusive counts as fail.
+  `python3 guards/gate.py install <repo>`) computes the facts — first the
+  skipped tests, read from the JUnit report of the configured test command —
+  and stages them into the same commit as `.workflow/gate-report.md`. It
+  blocks the commit only when it cannot run — the causes are listed by the
+  gate's own refusals; inconclusive counts as fail.
 - **Rationale.**
   1. **A fact computed by a tool cannot be misreported.** The review reads
      the report from the commit; the agent neither writes nor summarises it.
@@ -781,21 +450,9 @@ TARGET.md records the evolution; this document records the reasons.
      the gate) are left to a later after-the-fact check; deselected tests are
      not listed, since JUnit does not contain them and console output is not
      parsed.
-- **Rule location.** `WORKFLOW.md` (`## Where each rule is enforced`, row
-  "Skipped tests listed in the commit by a tool"); `guards/gate.py`;
-  `README.md` ("Pre-commit gate").
-- **Source.** Issue #2 of this repository.
 
 ## D-023 — Phase 5's design is a verifiable file, and its exits are the test list (2026-10-14)
 
-- **Context.** Phase 5 produced a `## Program Design` section on the ticket:
-  call stack, file tree, signatures. A document can be internally coherent and
-  **false about the world** — a declared signature the code does not keep, a
-  node declared "new" that already exists — and no check on its form sees that
-  (B-023, "case B"). And "do not write only the happy path" stayed an
-  intention: a contract without `raises` does not state that the callee does
-  not raise, it is silent, and silence is indistinguishable from a forgotten
-  exit.
 - **Decision.** The design is `docs/design/<feature>.md` **on the branch**:
   prose plus a fenced `json design` block with the call stack, file tree,
   signatures, data flow, and one contract per call with its exits.
@@ -819,22 +476,347 @@ TARGET.md records the evolution; this document records the reasons.
      residual, it does not pretend to know the library.
   4. **The exits are the test list**: the implementer receives the contracts,
      not the checker; the prover can turn every exit into a mutant.
-- **Rule location.** `phases/5-program-design.md`; `WORKFLOW.md` ("Where each
-  rule is enforced" table); `REVIEW-CRITERIA.md` (Spec axis, design-contract
-  conformance); `skills/program-design/SKILL.md`; `guards/check_design.py`.
-- **Source.** Experiment `2026-10-interactive-program-design` (B-023, prototype
-  and 10 mutation tests); session 2026-10-14.
 
----
+## D-024 — Every load-bearing rule declares its enforcement level; staying at `prompt` requires justification and an escalation trigger (2026-10-15)
 
-## Not a rationale yet (candidates)
+- **Decision.** Every load-bearing rule **declares** its enforcement level
+  (`structure` / `script` / `prompt`) in `WORKFLOW.md`'s
+  "Where each rule is enforced" table. **Staying at `prompt` is allowed only
+  when justified**: the rule carries a RATIONALE.md entry (or a row in
+  `RATIONALE.md`'s "Not a rationale yet" with an owner and a deadline) and
+  an **escalation trigger** — a falsifiable condition under which the rule
+  becomes `script` (e.g. "two reviewer failures of the same form in the
+  same project → write the check"). The level is not promised by the main
+  1 if any rule has no level, and the check itself is falsified by
+  `tests/test_gen_flow.py::test_livello_di_una_regola_rinominato_in_irriconoscibile`.
+  The first row of the table is the caposaldo itself, so a reader sees the
+  meta-rule before the rules.
+- **Rationale.**
+  1. **The table was dead until it was checked.** Before the fix, the
+     "Enforced by" column was aspirational — a human-readable gloss, not
+     column via `level_of`, which returns `""` if no level is recognized)
+     but it converts the question "is this rule enforced by code?" into a
+     command-line question with a non-zero exit on failure. This is the
+     same anti-vacuity pattern `audit.py` + `tests/test_audit.py` apply to
+     the workflow invariants (D-002); D-024 extends it to the rule
+     registry itself.
+  2. **An escalation trigger beats a one-shot "make it script".** A rule
+     promoted to `script` before a real failure is observed is
+     over-engineering (ponytail); a rule left at `prompt` indefinitely
+     is the bug class this decision addresses. The trigger — phrased as a
+     condition on observed failures, not a deadline — sits in the middle:
+     the rule stays cheap until evidence arrives, and the rule becomes
+     cheap *to escape* once evidence arrives. B-025 is the per-rule
+     application of the trigger to the 15 currently-`prompt` rules.
+  3. **Anti-vacuity is the load-bearing part.** The mutation test added
+     here reproduces the 2026-10-11 defect: "rinominare l'heading faceva
+     sparire le regole e `--check` usciva comunque 0 con 'copertura
+     completa'". A check that never fails on violating input is decoration;
+     the test makes the caposaldo falsifiable, which is what makes it
+     load-bearing.
 
-- **Audit check for this document** — RATIONALE.md is self-policing (a
-  change without an entry is "drift, not yet a violation"). If drift shows
-  up, the audit could flag WORKFLOW.md changes without a corresponding
-  RATIONALE.md entry in the same commit. Requires a mutation test
-  (anti-vacuity) — do not add without it.
-- **The /implement pointer gap in ask-matt** — the upstream router routes to
-  `/implement`, which is intentionally not installed (custom
-  `/implement-loop`). Pre-existing; either edit ask-matt locally or accept
-  the gap. Undecided.
+## D-026 — Reviewer evidence quotes are verified verbatim against the commit diff, not trusted (2026-10-15)
+
+- **Decision.** The verbatim rule is enforced by
+  `audit.py check_reviewer_evidence_verbatim` (B-025 voce 8): for every
+  finding with `claim=code`, the `quote` field must appear byte-for-byte
+  in the diff of `commit`; missing `quote`/`commit`, or `commit` not in
+  the gathered `pr_diffs`, or `quote` not in the diff, are all
+  violations. Coverage claims (`claim=coverage`, e.g. criterion 4 (b)) are
+  skipped — their proof is the mutation matrix, not a quoted diff. The
+  check has its own mutation tests in `tests/test_audit.py` (compliant,
+  quote-not-in-diff, missing-quote, commit-not-in-pr-diffs,
+  coverage-claim-skipped) — anti-vacuity.
+- **Rationale.** The same anti-vacuity pattern as D-002 (audit mutation
+  tests): a check that *could not* fail on a hallucinated quote is
+  decoration. The check's input shape (`reports: list[dict]`,
+  `pr_diffs: dict[str, str]`) is deliberately minimal — it does not depend
+  on the tracker, on `git`, or on the orchestrator: anyone with the JSONL
+  reports and the diffs can run it. Coverage claims are exempt because
+  they carry their own proof (the matrix); quoting the diff would be
+  cargo-culting, and the check is *not* the place to enforce how a coverage
+  claim looks — that's the mutation prover's contract.
+
+## D-027 — Brief coverage is counted, not read; every item needs a row (2026-10-15)
+
+- **Decision.** Brief coverage is verified by
+  `audit.py check_brief_coverage` (B-025 voce 9): for every `item_id` in
+  the brief, at least one row in the JSONL reports carries that `item_id`
+  (with any verdict, including `pass`, `fail`, or `n/a — motivo`). A brief
+  item with no row is a violation — "silence is not a verdict" made
+  mechanical. Mutation tests in `tests/test_audit.py` (compliant,
+  missing-item, fully-silent-reviewer).
+- **Rationale.** This is the counting-not-judging move the workflow has
+  wanted since D-020 ("the orchestrator checks coverage mechanically").
+  A reviewer can still produce a wrong verdict — that's the Spec axis's
+  judgment — but it can no longer *omit* an item and have that look like
+  a pass. The check operates on `item_id` strings, so it does not need
+  to understand the criterion semantics; that isolation is what makes it
+  cheap and stable.
+
+## D-028 — I6 (zero actionable findings to exit) is enforced by the status field on the JSONL report, not by judgment (2026-10-15)
+
+- **Decision.** I6 is verified by `audit.py check_i6_zero_actionable`
+  (B-025 voce 10): for every row in the JSONL reports, an
+  `status=open` + `severity=fatal` + `verdict=actionable` combination is
+  a violation — the loop must continue. `status=resolved` closes the
+  finding (set by the next commit / re-review); `severity=advisory` is
+  never a blocker and never triggers I6. Mutation tests in
+  `tests/test_audit.py` (compliant, open-fatal, closed-finding-passes,
+  advisory-never-blocks). The Spec axis still judges *whether* a finding
+  is actionable — that judgment stays prompt — but the *gate* on loop exit
+  is mechanical.
+- **Rationale.** This is the same `prompt → script` move D-026/D-027 make
+  on adjacent rules, and the rationale has the same shape: the check
+  operates on a structured field (`status`) and on a closed enumeration
+  (`verdict ∈ {open, resolved}`, `severity ∈ {fatal, advisory}`), so its
+  semantics are unambiguous and its falsifiability is testable. It does
+  *not* try to second-guess whether a finding *should* be actionable — the
+  Spec axis owns that judgment, and conflating "is this actionable" with
+  "is this open" is the kind of conflation that made the prior rule
+  unfalsifiable.
+
+## D-029 — "Phases in order" stays `prompt` until each phase has a machine-readable artifact (2026-10-17)
+
+- **Decision.** "Phases in order" remains at level `prompt` for phases
+  1-4. **Trigger of escalation**: when each phase produces a file under
+  `output/<phase>-<feature>.json` (or similar), an `audit.py
+  check_phase_artifacts` runs and reads them — moving the rule from
+  `prompt` to `script`. The phase skill files (`phases/1-...md`,
+  `phases/2-...md`, `phases/3-...md`, `phases/4-tickets.md`) declare the
+  expected artifact for each phase; once those declarations are
+  accompanied by a writing convention, the check becomes possible.
+- **Rationale.** Promoting the rule to `script` today would require either
+  inventing file formats the workflow does not produce (over-engineering,
+  ponytail violation) or scanning chat/ticket prose for keywords (the same
+  prompt-in-prose defect B-024 was written to prevent). The honest answer
+  is: the rule is load-bearing but not yet machine-checkable, so it stays
+  `prompt` until phase skills emit a structured artifact. Phase 5's
+  precedent (`docs/design/<feature>.md` → `--gate`) is the same move.
+
+## D-030 — "Main agent never edits / fresh context" stays `prompt` until the adapter records the author (2026-10-17)
+
+- **Decision.** The rule stays at level `prompt`. **Trigger of
+  escalation**: when the agent adapter (Claude Code / Pi / OMP)
+  records the actor of each commit in a machine-readable way (e.g. via
+  `Co-authored-by:` trailers the orchestrator can verify, or a separate
+  `actors/<session>.json` log), `audit.py check_actor_isolation` runs
+  and verifies (a) the main agent never appears as a committer on the
+  session's branch, and (b) every implementer commit has a fresh-context
+  marker (e.g. a different committer email or a session-id trailer).
+- **Rationale.** Anti-vacuity (D-002) requires the check to fail on
+  violating input. Without an actor trail, no check can be written — the
+  absence of data is not a state the audit can read. The trigger is
+  concrete: the adapter must write the actor somewhere the audit can
+  read, then the rule moves to `script`. Today the rule is held by the
+  brief and by the human's attention, both of which already failed once
+  (2026-10-08) — the fix is structural, not behavioral.
+
+## D-031 — "Review axes read-only, mutation prover in scratch" stays `prompt` until B-004 reporters are in production (2026-10-17)
+
+- **Decision.** Both sub-rules stay at level `prompt`. **Trigger of
+  escalation**: when `gather_reviewer_reports` and `gather_pr_diffs`
+  (B-004, `audit.py`) are wired into the standard `audit.py --repo ...`
+  run *and* the reports carry an `actor` field naming the sub-agent
+  role, an `audit.py check_reviewer_isolation(reports, pr_diffs)` runs
+  and verifies that no report quotes a diff the analyzer committed (i.e.
+  the report's `commit` was authored by a different actor than the
+  report's `reviewer` field). At that point, the rule moves to
+  `script`.
+- **Rationale.** Same anti-vacuity reasoning as D-030: the check cannot
+  fail today because the data is not collected. The trigger is
+  concrete and aligned with an existing backlog item — B-004's
+  `gather_*` functions and the JSONL schema's `reviewer` field are the
+  hooks. When the in-production reporters are wired, the rule
+  escalates; until then, the brief holds it.
+
+## D-032 — "Pre-push gate" stays `prompt` until the kit's hook is verifiable per-repo (2026-10-17)
+
+- **Decision.** The rule stays at level `prompt` for the *workflow*
+  (`WORKFLOW.md` documents the gate as the canonical pre-push
+  behavior). **Trigger of escalation**: when an `audit.py
+  check_pre_push_gate_installed(repo)` reads the agent's hook
+  configuration (`~/.claude/settings.json` for Claude Code, the
+  equivalent for other agents) and verifies the kit's gate is wired,
+  the rule moves to `script`. Until then, the workflow trusts the
+  operator (or the operator's install procedure) to wire the hook.
+- **Rationale.** The gate exists; what is missing is the *audit of its
+  presence*. Anti-vacuity (D-002) is satisfied by the gate itself
+  (it can fail when invoked) but not by the *rule that the gate is
+  installed* — that is the load-bearing part this D-032 covers. The
+  trigger is concrete and orthogonal to the gate's own correctness:
+  install verification is its own concern, and B-007 already lists it
+  as a candidate for the kit's adapter layer.
+
+## D-035 — I2 and I6 verification lines now cite the scripts that verify them (2026-10-17)
+
+- **Decision.** `INVARIANTS.md` is updated to cite the verifying scripts
+  inline: I2 adds `` `guards/check_design.py --gate` (pre-push hook,
+  B-023) `` to its Verification line; I6 adds
+  `` `audit.py check_i6_zero_actionable` (D-028) ``. The clauses (the
+  "manual handoff audit" / "handoff audit" parts) are preserved — the
+  judgment is still required, but it is now accompanied by a script.
+rule **visible**, not just promised. `check_invariant_verification_
+  exists` makes the same demand on the invariant registry itself: an
+  invariant that says "judgment" without an accompanying tool is a
+  declaration of taste, not a law. The drift this caught is small
+  (citations were missing, scripts were not) — but anti-vacuity
+  principles say the *existence of the check* is what makes the rule
+  load-bearing, and the check is now wired.
+
+## D-040 — R-003 chiude le 4 ipotesi discriminanti B-025; merge in master (2026-10-15)
+
+- **Decision.** Merge di `experiment/prompt-to-script` in master
+  (`--no-ff` per commit di merge visibile). 4/4 ipotesi discriminanti
+  B-025 PASS: H5 (premises, T7-synth 5/5), H6 (phase 2, T8-synth 5/5),
+  H7 (invariant verification, T6-synth 5/5), H8 (claim present,
+  T9-synth 4/4). I 3 check di B-004 (verbatim, copertura, I6) sono
+  regression (già in master) — i 190 test mutation esistenti li
+  coprono. 1 bug scoperto durante la validazione: D-035-bis
+  (`check_invariant_verification_exists` non rilevava `**Verification**: `
+  riga vuota, fix in `f349e7e`).
+- **Rationale.** R-003 ha pagato il proprio costo: senza T6-synth il
+  bug D-035-bis non sarebbe emerso (i test mutation esistenti non
+  coprivano il caso "Verification vuota"). Il task synth ha stressato
+  un caso limite reale, e il fix è in master. Le 7 voci B-025 sono
+  ora in master come check in `audit.py`, ognuna con i propri test
+  mutation. Voci 1/6/7/11 restano prompt-only con trigger (D-029/30/31/32).
+  Voci 9/10/11 di B-025 non sono state misurate in R-003 (rimandate
+  a R-004) — sono coperte da test mutation esistenti.
+
+## D-041 — B-025 voce 14 sale a `struttura` via pre-commit hook (2026-10-15)
+
+- **Decision.** B-025 voce 14 sale a `struttura` via
+  `guards/hooks/pre-commit-rationale`. Il check `audit.py
+  check_rationale_entry_in_pr` resta come ridondanza (per i merge PR
+  su GitHub, dove il hook locale non è stato eseguito). Il workflow
+  ha ora **1 regola a livello struttura**: la prima.
+- **Rationale.** L'inverse-pyramid di poteto richiede che le regole
+  più importanti siano rese **impossibili da violare**, non solo
+  rilevate a posteriori. Un hook pre-commit che blocca un commit
+  senza `RATIONALE.md` su `phases/*.md` o `WORKFLOW.md` è struttura
+  nel senso del workflow: l'agent e l'umano non possono committare
+  un cambio di regole senza motivazione. L'eccezione documentata è
+  `git commit --no-verify` (escape hatch esplicito, registrato come
+  tale; il check `audit.py` lo cattura lo stesso sulla PR).
+
+## D-043 — Le scelte portanti del Program Design richiedono `## Decision` e il sign-off del committente (2026-11-09)
+
+- **Decision.** Una scelta del Program Design che cambia comportamento
+  dell'agente, costo di esecuzione o un contratto esterno (CLI argv, chiavi di
+  configurazione, wire format, layout dei file) è **load-bearing**: deve
+  comparire come `## Decision` con la scelta, le alternative scartate, le
+  conseguenze e un link al commento di sign-off del committente. La sezione
+  sta nel file di design (`docs/design/<feature>.md`) e nel `## Program Design`
+  appeso al ticket; una scelta per sezione, l'heading inizia con `## Decision`.
+  Un design che fa una scelta così senza la sezione è incompleto; l'asse Spec
+  la alza come `fatal`, citando il testo del design come evidenza. Se il design
+  non ha scelte portanti, non serve alcuna sezione.
+- **Rationale.** La scelta non è un dettaglio implementativo: cambia il
+  comportamento dell'agente e il costo, e il contratto esterno è la parte che
+  il committente deve poter vedere prima che diventi codice. Il design è già
+  il contratto (I2); una decisione portante senza alternative e senza sign-off
+  non è verificabile né reversibile. La regola vive a livello **globale**
+  perché lo stesso difetto può comparire in qualunque repo.
+
+## D-044 — Le fixture dei sistemi esterni dichiarano la provenienza in un manifest verificato (2026-11-09)
+
+- **Decision.** Una fixture che sta per un sistema esterno dichiara la
+  provenienza in un manifest markdown (default
+  `tests/fixtures/PROVENANCE.md`) con `fixture`, `source` (`captured` /
+  `contract` / `synthetic`), `reference` e `sanitized`/`why`. `captured` è un
+  campione reale ripulito (`sanitized` dice cosa è stato rimosso, o `none`);
+  `contract` viene da un documento di contratto nominato; `synthetic` è
+  ammesso solo con il motivo. `guards/check_fixtures.py` valida il manifest
+  (forma, esistenza dei file, source/reference/sanitized/why) e con `--scope`
+  segnala i file non dichiarati. Il design elenca i sistemi esterni e il
+  manifest in `## External fixtures`. L'asse Spec (g) giudica se la fixture è
+  esterna e se la fonte è quella giusta: una fixture esterna senza riga, o
+  `synthetic` senza motivo, è `fatal` se usata da un contract test, `advisory`
+  altrimenti. Se il design non ha fixture esterne, lo dice in una riga.
+- **Rationale.** La fixture è la prova del contratto con il mondo esterno: se
+  è inventata, il test prova una tautologia e la review non ha nulla da
+  leggere. Il manifest rende la provenienza un fatto reviewabile (chi, quando,
+  da quale sistema, cosa è stato rimosso) invece di una convenzione implicita;
+  il checker rende la forma del manifest meccanica, mentre la completezza
+  (quali fixture sono esterne) resta giudizio. Il costo è una tabella per
+  design, non una nuova infrastruttura.
+
+## D-045 — Il rosso TDD deve fallire per il motivo giusto, e il report lo cita (2026-11-09)
+
+- **Decision.** Due righe nella skill `tdd` e nel brief dell'implementer:
+  (1) il test rosso deve fallire per il motivo previsto — un'asserzione sul
+  comportamento, non un import/setup error; (2) il report dell'implementer cita
+  il test rosso (`path::name`) e l'errore prodotto, poi la corsa verde. Un test
+  mai visto rosso non è una prova.
+- **Rationale.** D-019 ha già la parte forte (il mutante che resta verde =
+  blind test); questa regola copre la parte debole e più economica: il rosso è
+  la prima prova che il test discrimina qualcosa, ma solo se il fallimento è
+  quello giusto. Un import error o una fixture mancante producono un rosso che
+  non dice nulla sul comportamento. Citare il rosso nel report rende la prova
+  reviewabile senza ricostruirla dalla chat.
+
+## D-046 — Il mutation prover è agente + script: il giudizio sceglie i mutanti, lo script li esegue (2026-11-09)
+
+- **Decision.** Due ruoli. (1) **Agente**: per ogni legge dichiarata o
+  criterio `fatal` sceglie l'implementazione sbagliata ma plausibile e la
+  scrive come patch in un manifest macchina — `id`, `file`, `patch`,
+  `invariant`, `test`, `note`. (2) **Script**
+  `guards/mutation_prover.py`: worktree pulito per mutante,
+  `PYTHONPATH` sul worktree, **controllo per primo** (verde/no-test → matrice
+  `inconclusive`, exit 1), poi la suite mirata; emette una matrice JSONL
+  `pinned` / `blind-test` / `no-test` / `error` con il diff di ogni mutante e
+  rimuove i worktree. `mutmut` resta opzionale e consultivo, mai gate.
+- **Rationale.** Il giudizio — quale implementazione sbagliata è plausibile —
+  resta all'agente, dove serve il contesto; la parte meccanica (applicare,
+  isolare, girare, ripristinare, registrare) è deterministica e va a uno
+  script. Il controllo è una riga che il prover esegue, non una promessa nel
+  brief; `PYTHONPATH` sul worktree elimina il falso verde del venv editable; il
+  worktree usa-e-getta elimina la contaminazione del ramo. La matrice JSONL è
+  la stessa forma strutturata di B-004, quindi i reviewer possono consumarla.
+
+## D-047 — Ogni claim di report/handoff porta la prova o l'etichetta misurato/dedotto/ipotesi (2026-11-09)
+
+- **Decision.** Ogni affermazione in un report finale o in un handoff porta,
+  nella stessa frase, la prova oppure l'etichetta `measured` / `deduced` /
+  `hypothesis`. Un numero senza una misura è `hypothesis`, non un risultato.
+- **Rationale.** È la versione leggera della confidence ladder (B-020): non
+  aggiunge un formato nuovo, ma rende la fiducia reviewabile. Il lettore sa
+  subito se sta leggendo un dato, un'inferenza o un sospetto; il reviewer può
+  chiedere la prova senza ricostruire la chat.
+
+## D-048 — Risk assessment deterministico nella PR e blast-radius condizionale (2026-11-09)
+
+- **Decision.** Dopo la review a zero findings e prima della PR, il
+  coordinatore scrive nel corpo della PR `Risk: low|med|high`,
+  `Blast radius:` (file di confine: DB, auth, migrazioni, API pubbliche,
+  infra, deps) e `Where to look:`. Euristica deterministica sui path:
+  migrazioni/auth/infra/deps/API pubblica = high; API interne/moduli
+  condivisi/config = med; UI pura/refactor meccanico/test-only = low. Per
+  `med|high`, esegue il blast-radius condizionale: cerca fuori dal diff e
+  prova il fatto da cui dipende la sicurezza; se non può eseguirlo, dichiara
+  `residual` ed escala un contratto pubblico. La skill `why` (B-017) resta il
+  primo passo leggero ed è ancora aperta.
+- **Rationale.** La review guarda il diff; le rotture vere stanno spesso fuori
+  (un pin, un consumer, un deploy script). L'etichetta non è un giudizio di
+  review e non deve diventare un reviewer in più: è una checklist deterministica
+  che dice al committente dove guardare. B-014 è condizionale perché il costo
+  della ricerca fuori dal diff si giustifica solo per `med|high`.
+
+## D-049 — Il kit pubblico è un artefatto generato dal repo canonico (2026-11-09)
+
+- **Decision.** Il repo canonico è l'unica superficie di modifica. `kit/`
+  contiene i file public-only (README, CHANGELOG, LICENSE, install.sh, skills,
+  handoffs skeleton); `sync_kit.py` deriva documenti, guardie e test,
+  riscrive i path, neutralizza i nomi di progetto e applica un leak gate;
+  `--check` fallisce su drift o riferimento privato, `--write` rigenera il
+  target. Il repo pubblico `agentic-dev-kit` diventa un mirror generato, con
+  lo stesso tag; il `RATIONALE.md` pubblico è un decision register generato
+  (heading + Decision + Rationale, senza evidence privata). La skill installata
+  può puntare al `kit/skills` canonico o a un checkout generato.
+- **Rationale.** Una sola fonte elimina la classe di drift che ha colpito
+  questa release; il confine pubblico/privato resta, ma diventa un controllo
+  meccanico invece di una disciplina. Gli utenti continuano ad avere un repo
+  pubblico normale, con README, CHANGELOG e tag; il manutentore non edita due
+  copie. Il leak gate ha già trovato nomi di cliente nel kit v0.3.0: senza
+  generatore, il confine era già rotto.

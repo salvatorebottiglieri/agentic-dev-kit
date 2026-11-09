@@ -806,6 +806,12 @@ def copy_kit(dest: Path, *, checkout: bool) -> Path:
     """A copy of the kit's guards/ at ``dest``; committed in its own repo when ``checkout``."""
     shutil.copytree(KIT / "guards", dest / "guards",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    # The kit copy is initialised as its own git repo. Tests that
+    # import any guards/* module would otherwise create __pycache__/ in
+    # `dest/guards/`, which `git status --porcelain -- guards` would
+    # then report as an untracked change. The kit's own .gitignore
+    # excludes __pycache__; copying it preserves that.
+    shutil.copy(KIT / ".gitignore", dest / ".gitignore")
     (dest / "README.md").write_text("kit copy\n")
     if checkout:
         git(dest, "init", "-q")

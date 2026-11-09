@@ -19,11 +19,15 @@ one, reads `~/.claude/skills/<name>`, a symlink to
 version to verify; a copy per agent is how a session ends up executing rules
 older than the ones it just read.
 
-The store is filled from a clone of the kit, never by hand-copying:
+The public kit is generated from the canonical repo's `kit/` directory by
+`sync_kit.py`; the public `agentic-dev-kit` repository is a mirror, not a
+second source. For the maintainer the store can point at the canonical
+`kit/skills` (or at a generated checkout); external users install from the
+public clone:
 `git clone github.com/salvatorebottiglieri/agentic-dev-kit ~/agentic-dev-kit`,
-then `AGENT_SKILLS_DIR=~/.agents/skills ~/agentic-dev-kit/install.sh`, which
-symlinks the clone's skills into the store. The clone is the single source;
-the docs and `audit.py` stay in it (`~/agentic-dev-kit/WORKFLOW.md`).
+then `AGENT_SKILLS_DIR=~/.agents/skills ~/agentic-dev-kit/install.sh`. Edits
+to public-only files go to the canonical `kit/`; edits to rules go to the
+canonical files; `sync_kit.py --check` fails on drift or a private reference.
 
 The tracker is the one configured for the repo (GitHub, GitLab, Linear,
 or a local tracker — `/setup-matt-pocock-skills` configures it).

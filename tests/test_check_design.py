@@ -88,9 +88,9 @@ def test_ghost_node_is_external(tmp_path: Path) -> None:
 
 
 def test_new_module_of_the_repo_stays_internal(tmp_path: Path) -> None:
-    (tmp_path / "src" / "memex").mkdir(parents=True)
+    (tmp_path / "src" / "example").mkdir(parents=True)
     doc = {"data_flow": {"nodes": [{"id": "integrity.check",
-                                    "module": "src/memex/integrity.py"}]},
+                                    "module": "src/example/integrity.py"}]},
            "contracts": [_contract(callee="integrity.check")]}
     assert CD.check_frontier(doc, tmp_path) == []
 

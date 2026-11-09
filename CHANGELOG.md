@@ -3,11 +3,24 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-11-09
+
+### Changed
+- The public kit is now generated from the canonical workflow source by
+  `sync_kit.py`; this repository is a read-only mirror, not a second source.
+- Private project names in tests and comments were neutralized; the public
+  `RATIONALE.md` is a generated decision register (Decision + Rationale, no
+  private session evidence).
+- `WORKFLOW.md` installation guidance updated for the generated export.
+
+### Unchanged
+- The v0.3.0 rules and skills. v0.4.0 is a packaging/release-hygiene release.
+
 ## [0.3.0] — 2026-11-09
 
-Promuove la `v0.3.0-rc` dopo l'uso in produzione (Agent 3, software-factory,
-botti-agent): design gate, JSONL reports, fixture provenance, role isolation,
-TDD red-first, mutation prover agent+script, claim labels e risk/blast-radius.
+Promuove la `v0.3.0-rc` dopo l'uso in produzione su più repo di prodotto:
+design gate, JSONL reports, fixture provenance, role isolation, TDD red-first,
+mutation prover agent+script, claim labels e risk/blast-radius.
 Nessuna rimozione backward-incompatible.
 
 ### Added
@@ -54,7 +67,7 @@ Nessuna rimozione backward-incompatible.
 
 ## [0.3.0-rc] — 2026-10-15
 
-**Release candidate** — allineamento con `agentic-workflow` v0.3.0 (32
+**Release candidate** — allineamento con il workflow canonico v0.3.0 (32
 regole, 1 struttura, 19 script, 12 prompt; 17 check in `audit.py`).
 Backward-compatible: nessuna rimozione, solo allineamento. Tutto ciò
 che funzionava con v0.2.0 continua a funzionare.
@@ -71,18 +84,14 @@ di promuovere a v0.3.0. **Non consumare senza test**.
   The pre-push hook runs the `--gate` subset (no state); the full mode runs at
   the end of phase 5. Touches `phases/5-program-design.md`, `REVIEW-CRITERIA.md`
   (Spec axis), `skills/program-design/SKILL.md` and `RATIONALE.md` D-023.
-  The canonical implementation is `~/agentic-workflow/guards/check_design.py`;
-  the kit copy follows it and must not drift.
-- `audit.py` + `tests/test_audit.py` — parity with the canonical
-  `~/agentic-workflow/audit.py` (869 lines, 17 checks) and its test suite
-  (842 lines). The canonical is the source: the kit copies it, with only the
-  module-docstring example path adapted.
-- `WORKFLOW.md` è un file reale derivato dal canonico di `agentic-workflow` da
-  `guards/sync_workflow.py` (`--check` rileva il drift). Non è un symlink: i
-  cloni del repo pubblico non possono risolvere `../agentic-workflow`, che è
-  privato. La copia differisce solo per i percorsi `~/agentic-workflow/` →
-  `~/agentic-dev-kit/` e per le righe che citano file solo privati
-  (`LESSONS.md`, `BACKLOG.md`, `gen-flow.py`).
+  The canonical implementation is in the workflow source; the kit copy
+  follows it and must not drift.
+- `audit.py` + `tests/test_audit.py` — parity with the canonical `audit.py`
+  and its test suite. The canonical is the source: the kit copies it, with
+  only the module-docstring example path adapted.
+- `WORKFLOW.md` è un file reale generato dal workflow canonico; la copia
+  pubblica riscrive i percorsi e omette i riferimenti privati. Non è un
+  symlink, così un clone del repo pubblico resta autosufficiente.
 - `skills/implement-loop/SKILL.md` — paragrafo *"Report format — JSONL,
   not prose"* (D-025, B-004): i reviewer scrivono `reports/<feature>-<axis>.jsonl`
   con schema canonico (`criterion`, `item_id`, `verdict`, `severity`,
@@ -125,10 +134,9 @@ tornare a v0.2.0 in locale: `cp -a ~/.agents/skills.bak.20261015/
 `v0.3.0-rc` resta intatto.
 
 ### Related
-- `agentic-workflow` master al commit `b35897c` (pushato) contiene
-  le 32 regole, D-041 (pre-commit hook per RATIONALE.md = prima regola
-  a livello struttura), e 4 task synth R-003 (H5/H6/H7/H8 PASS).
-- Handoff: `agentic-workflow/handoffs/handoff-workflow-split-v030rc-20261015.md`.
+- The canonical workflow source is private; this kit is generated from it.
+  The release notes keep the public decisions and omit private session
+  evidence.
 
 ## [0.2.0] — 2026-10-14
 
@@ -136,8 +144,7 @@ Pre-commit gate: workflow rules that asked the agent to *report* a fact
 (skipped tests, a release's stale pins) now have that fact computed by a
 tool instead, measured against the textual rule in an A/B replay (B 5/5 vs
 A 0/5 on skipped tests, B 5/5 vs A 2/5 on stale pins; 0 bypasses, 0 false
-alarms; `experiments/2026-10-pstack-bjarnason/RESULTS-ROUND2.md` in the
-private workflow repo).
+alarms; results in the private workflow repo).
 
 ### Added
 - `guards/gate.py` + `guards/hooks/pre-commit` — a git pre-commit hook that

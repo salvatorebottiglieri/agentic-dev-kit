@@ -363,7 +363,7 @@ def check_frontier(doc: dict, root: Path) -> list[str]:
         """Outside the repo: a call described in free text (`call`, without
         `callee`/`callees`, hence towards something that is not a node), or a
         node whose module is not a .py file of the repo (a ghost). A new module
-        (`src/memex/integrity.py` not created yet) stays internal: its folder
+        (`src/example/integrity.py` not created yet) stays internal: its folder
         exists, it is our code that the design proposes."""
         if c.get("call") and not (c.get("callee") or c.get("callees")):
             return True

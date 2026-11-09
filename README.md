@@ -1,5 +1,9 @@
 # agentic-dev-kit
 
+> **Generated repository.** This kit is exported from the canonical workflow
+> source by `sync_kit.py`. Do not edit it by hand; changes go to the canonical
+> `kit/` source and are exported.
+
 [![version](https://img.shields.io/github/v/tag/salvatorebottiglieri/agentic-dev-kit?label=version&sort=semver)](CHANGELOG.md)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 

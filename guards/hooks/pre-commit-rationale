@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Shim: guards/hooks/pre-commit-rationale — see ../check_rationale_required.py.
+
+This shim exists so the hook chain (pre-commit) can call the rationale
+check by file name (like a normal git hook) and the logic stays in
+`guards/check_rationale_required` for import + mutation-test.
+
+Stdlib only. Exit 0 = pass, 2 = blocked, 1 = script error.
+"""
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))  # make `guards` importable
+
+import check_rationale_required  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(check_rationale_required.main())

@@ -4,7 +4,7 @@
 Pure check functions (input data -> violations) + a CLI that gathers data
 from the configured tracker via ``gh``. Run in any project:
 
-    python ~/agentic-workflow/audit.py --repo owner/repo [--since YYYY-MM-DD]
+    python ~/agentic-dev-kit/audit.py --repo owner/repo [--since YYYY-MM-DD]
 
 Each check maps to an invariant in INVARIANTS.md; every check must be able
 to fail (see tests/test_audit.py — mutation tests feed deliberately
@@ -165,7 +165,7 @@ QUOTED_COMMAND_RE = re.compile(
 
 #: The repo a handoff declares it concerns, which is what scopes I9 to a
 #: project (see ``check_followups_tracked``). Canonical form:
-#: ``- **Repo**: BranchToast/branchtoast-news-pipeline``. Bullet, numbering,
+#: ``- **Repo**: example/example-repo``. Bullet, numbering,
 #: bold label and label case are tolerated — a handoff is a prose document —
 #: while the slug is taken literally. Prefer the canonical form when writing.
 HANDOFF_REPO_RE = re.compile(
