@@ -3,7 +3,12 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] — 2026-11-09
+
+Promuove la `v0.3.0-rc` dopo l'uso in produzione (Agent 3, software-factory,
+botti-agent): design gate, JSONL reports, fixture provenance, role isolation,
+TDD red-first, mutation prover agent+script, claim labels e risk/blast-radius.
+Nessuna rimozione backward-incompatible.
 
 ### Added
 - `skills/program-design/SKILL.md` — `## Decision` for load-bearing Program
