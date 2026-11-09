@@ -3,6 +3,45 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-11-09
+
+Aggiunge la skill `modular-monolith` e separa il README dalla reference dei
+gate. Nessuna rimozione backward-incompatible.
+
+### Added
+- `skills/modular-monolith/` — designs or evolves a modular monolith inside
+  phase 3: module map (bounded context, published interface, owned stored
+  data, edges, events), module rows of the system invariants, and a fitness
+  function in CI. Three branches: greenfield, feature, modularize (ratchet on
+  the fitness function's exception list). Stack-neutral except
+  `ENFORCEMENT.md`, which holds the per-stack layout and tools: the Python
+  recipe with `import-linter>=2.6`, other stacks with their tools.
+- `docs/GATES.md` — the detailed pre-commit/pre-push gate reference moved out
+  of the README; the landing page links to it.
+
+### Changed
+- `system-architecture` reads `modular-monolith` at step 2 and carries a
+  `### Module map` in its template; phase 3 states that module-map changes
+  are not skippable.
+- `WORKFLOW.md` phase 3 lists `modular-monolith`; `install.sh` links it.
+
+### What's new for users
+- A fifth custom skill, `modular-monolith`, read by `system-architecture` when
+  the system is (or is becoming) a modular monolith: module map, module
+  invariants, a fitness function in CI, and three branches (greenfield,
+  feature, modularize).
+- The README is now a 103-line overview; gate configuration, `final` mode,
+  bypasses and known limits moved to `docs/GATES.md`.
+
+### Upgrading from v0.4.0
+- Reinstall with `./install.sh` (or check out the `v0.5.0` tag); the installer
+  links the new `modular-monolith` skill. Existing skills are unchanged.
+- Breaking changes: none.
+
+### Verification
+- 251 tests in the canonical repo; 234 tests in the generated kit; the export
+  `--check` reports no drift.
+
 ## [0.4.0] — 2026-11-09
 
 ### Changed

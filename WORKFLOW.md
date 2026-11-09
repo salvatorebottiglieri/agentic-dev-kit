@@ -42,7 +42,7 @@ The phase file holds the phase's own rules.
 |---|---|---|---|
 | 1 | Design & alignment | `grill-with-docs`, `domain-modeling`, `to-spec` | `phases/1-design-and-alignment.md` |
 | 2 | Product review (only when the feature touches UI) | `product-review` | `phases/2-product-review.md` |
-| 3 | System architecture (only when non-trivial) | `system-architecture` | `phases/3-system-architecture.md` |
+| 3 | System architecture (only when non-trivial) | `system-architecture`, `modular-monolith` | `phases/3-system-architecture.md` |
 | 4 | Tickets | `to-tickets` | below |
 | 5 | Program design (near-always) | `program-design` | `phases/5-program-design.md` |
 | 6 | Implement-loop | `implement-loop`, `code-review`, `ponytail-review` | `phases/6-implement-loop.md` |
@@ -116,11 +116,11 @@ reads and obeys it.
   ("Phase N skipped — <reason>") and annotated on the ticket/spec:
   "Skipped — <reason>".
 - Custom skills (implement-loop, product-review, program-design,
-  system-architecture) are authored in `~/agentic-dev-kit/skills/` (repo:
-  github.com/salvatorebottiglieri/agentic-dev-kit) and installed by that
-  repo's `install.sh` (`AGENT_SKILLS_DIR=~/.agents/skills`) into the
-  agent-neutral store `~/.agents/skills/`. An agent that expects its own
-  skills directory is pointed into the store — `~/.claude/skills/<name>` →
+  system-architecture, modular-monolith) are authored in the canonical
+  `kit/skills/` and installed by the public `agentic-dev-kit` repo's
+  `install.sh` (`AGENT_SKILLS_DIR=~/.agents/skills`) into the agent-neutral
+  store `~/.agents/skills/`. An agent that expects its own skills directory
+  is pointed into the store — `~/.claude/skills/<name>` →
   `../../.agents/skills/<name>` — not installed a second time.
 - Reference docs: `~/agentic-dev-kit/INVARIANTS.md` (workflow invariants I1–I6),
   `~/agentic-dev-kit/INVARIANTS-METHOD.md` (theory and process),

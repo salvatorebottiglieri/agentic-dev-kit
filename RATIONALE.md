@@ -820,3 +820,32 @@ rule **visible**, not just promised. `check_invariant_verification_
   pubblico normale, con README, CHANGELOG e tag; il manutentore non edita due
   copie. Il leak gate ha già trovato nomi di cliente nel kit v0.3.0: senza
   generatore, il confine era già rotto.
+
+## D-050 — I confini del modular monolith sono tenuti da una fitness function, letta come ramo della fase 3 (2026-11-09)
+
+- **Decision.**
+  1. **Skill separata, user-invocation only.** `modular-monolith` si legge
+     via `skill://` da `system-architecture` step 2; zero context load, un
+     solo punto di aggancio. Tre rami: greenfield, feature su un monolite già
+     modulare, modularize di una codebase esistente.
+  2. **I confini sono `script`, non `prompt`.** Ogni legge che lo stack sa
+     verificare mappa su un contratto della fitness function nel comando
+     canonico di CI, provato rosso da una control violation (stessa
+     anti-vacuity degli invarianti). Ricetta Python: `import-linter>=2.6`
+     (`protected` per modulo, `acyclic_siblings`, `forbidden` per lo shared
+     kernel), verificata su un toy project il 2026-10-21, incluso il pitfall
+     del wildcard `shop.*` e la `ignore_imports` stale che rende nativo il
+     ratchet del modularize.
+  3. **Data ownership resta `prompt`** finché il repo non ha uno schema e un
+     ruolo DB per modulo; la riga dell'invariante lo dice esplicitamente.
+     Trigger di escalation: una review trova un accesso cross-modulo a una
+     tabella → i ruoli DB per modulo diventano un ticket.
+  4. **Non skippabile per forma del diff**: un feature che aggiunge un modulo,
+     un arco o stored data cambia la module map, anche quando «segue i pattern
+     esistenti».
+- **Rationale.** Una mappa senza un controllo è una convenzione; la fitness
+  function è la stessa anti-vacuity degli invarianti applicata ai confini.
+  Tenerla nello stack-specifico `ENFORCEMENT.md` permette di cambiare stack
+  senza riscrivere le leggi. La lettura come ramo della fase 3 evita una fase
+  nuova e non aggiunge carico di contesto agli agenti che non hanno un
+  modular monolith.
