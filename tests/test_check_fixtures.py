@@ -123,6 +123,15 @@ def test_scope_flags_an_unlisted_file(tmp_path: Path) -> None:
     assert any("forgotten.json" in v for v in violations)
 
 
+def test_scope_outside_root_is_a_violation(tmp_path: Path) -> None:
+    _fixture(tmp_path, "tests/fixtures/external/jira.json")
+    path = _write(tmp_path, _manifest(
+        "| `tests/fixtures/external/jira.json` | captured | Jira dev | none |",
+    ))
+    violations = CF.check_rows(CF.parse_manifest(path.read_text()), tmp_path, tmp_path.parent)
+    assert any("outside the repo root" in v for v in violations)
+
+
 def test_scope_ignores_manifest_readme_and_gitkeep(tmp_path: Path) -> None:
     _fixture(tmp_path, "tests/fixtures/external/jira.json")
     scope = tmp_path / "tests" / "fixtures" / "external"

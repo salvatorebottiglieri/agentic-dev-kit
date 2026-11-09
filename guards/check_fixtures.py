@@ -138,7 +138,9 @@ def check_rows(
         if not scope_path.is_absolute():
             scope_path = root / scope_path
         scope_path = scope_path.resolve()
-        if not scope_path.is_dir():
+        if root not in scope_path.parents and scope_path != root:
+            violations.append(f"scope '{scope}' is outside the repo root")
+        elif not scope_path.is_dir():
             violations.append(f"scope '{scope}' is not a directory")
         else:
             for path in sorted(scope_path.rglob("*")):
