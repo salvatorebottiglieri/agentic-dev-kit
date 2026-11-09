@@ -76,6 +76,9 @@ reads and obeys it.
 | External-system fixtures declare provenance (`captured` / `contract` / `synthetic`) in the design and a fixtures manifest — D-044 | phase 5 + phase 6 (Spec axis) | script (`guards/check_fixtures.py` validates the manifest and the listed files; pre-push hook when `tests/fixtures/PROVENANCE.md` exists) + prompt (Spec axis (g) judges which fixtures are external and whether the source is right) |
 | Main agent never edits code; fresh context per subagent; verbatim diffs | phase 6 | prompt |
 | TDD is red-first for the expected reason and the report cites the red test and its error (B-013) | phase 6 | prompt (implement-loop brief + tdd skill) |
+| Claims in final reports and handoffs carry evidence or the label `measured` / `deduced` / `hypothesis` (B-011) | General rules | prompt |
+| Risk assessment in the PR body: `Risk: low/med/high`, `Blast radius:`, `Where to look:` (B-001) | phase 6 | prompt (implement-loop; deterministic path heuristic) |
+| Conditional blast-radius for `Risk: med/high`: search outside the diff and run the fact the safety depends on (B-014) | phase 6 | prompt (implement-loop; skill `why` B-017 still open) |
 | Review axes read-only; only the mutation prover applies mutants, in a scratch worktree; implementer/fixer briefs contain no mutation verb (B-007) | `REVIEW-CRITERIA.md` | prompt |
 | Mutation prover: the agent chooses the mutants, `guards/mutation_prover.py` executes them in clean worktrees, control first (B-026/D-046) | phase 6 | script (`guards/mutation_prover.py`; JSONL matrix `pinned`/`blind-test`/`no-test`/`error`; control green = `inconclusive`, exit 1) + prompt (the agent chooses targets and patches) |
 | Evidence quote matches the diff verbatim (criterion 4) | `REVIEW-CRITERIA.md` | script (`audit.py check_reviewer_evidence_verbatim`, every code-claim quote matched against `commit`'s diff) + prompt (`weights.Spec` axis judgment on content) |
@@ -118,6 +121,10 @@ reads and obeys it.
 - Reference docs: `~/agentic-dev-kit/INVARIANTS.md` (workflow invariants I1–I6),
   `~/agentic-dev-kit/INVARIANTS-METHOD.md` (theory and process),
   `~/agentic-dev-kit/RATIONALE.md` (the why of every load-bearing rule).
+- **Claims carry their evidence or a label.** In final reports and handoffs,
+  every claim states its evidence or the label `measured` / `deduced` /
+  `hypothesis` in the same sentence. A number without a measurement is a
+  hypothesis, not a result (B-011).
 - **Rule changes carry a rationale**: any change to a load-bearing rule in
   this file adds or updates an entry in `~/agentic-dev-kit/RATIONALE.md`
   (same session, citing the rule location). A rule without a rationale

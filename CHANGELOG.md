@@ -36,7 +36,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `inconclusive`), runs the targeted test, emits a JSONL matrix
   `pinned`/`blind-test`/`no-test`/`error`, and removes the worktrees. `mutmut`
   remains optional and consultative.
-- `WORKFLOW.md` sync: 37 rules (1 structure, 22 script, 14 prompt).
+- Claim labels (B-011/D-047): final reports and handoffs label every claim
+  `measured` / `deduced` / `hypothesis` with its evidence in the same sentence.
+- Risk assessment (B-001/D-048): the PR body carries `Risk: low|med|high`,
+  `Blast radius:` and `Where to look:`, computed deterministically from the
+  diff paths; it is triage metadata, not a review criterion.
+- Conditional blast-radius (B-014/D-048): for `Risk: med|high` the coordinator
+  searches outside the diff (wire format, pins, deploy scripts, cross-repo
+  contracts) and executes the fact the safety depends on, or declares a
+  residual.
+- `WORKFLOW.md` sync: 40 rules (1 structure, 22 script, 17 prompt).
 
 ## [0.3.0-rc] — 2026-10-15
 

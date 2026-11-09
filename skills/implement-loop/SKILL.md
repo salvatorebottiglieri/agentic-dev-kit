@@ -325,6 +325,39 @@ repo — not just the subagent's tests:
    the failures verbatim, then re-review (step 2) and re-run the gate.
 4. Only proceed to the PR when test and lint are both green.
 
+## 6b. Risk assessment (B-001/B-014)
+
+After the reviews are clean and before the PR, compute a triage label from the
+diff's file paths — deterministic, not a reviewer subagent:
+
+- **high**: DB migrations, auth/permissions, infra/deploy, dependency
+  manifests/lockfiles, public API/wire format, secrets/IAM.
+- **med**: internal APIs, shared modules, config keys, file layout.
+- **low**: UI-only, mechanical refactor, test-only, docs.
+
+Put it in the PR body:
+
+```text
+Risk: low|med|high
+Blast radius: <files or areas outside the diff that can break>
+Where to look: <the critical points a human should read first>
+```
+
+It is triage metadata, not a review criterion: it does not replace any axis.
+
+For `Risk: med|high`, run the **conditional blast-radius** check before the
+PR:
+
+1. Search outside the diff for wire format, version pins, deploy scripts,
+   cross-repo contracts, and consumers of the changed surface.
+2. Execute the fact the safety depends on (a consumer contract test, a pin
+   check, a schema diff, a deploy dry-run). Reading is not enough.
+3. If it cannot be executed, write `residual: <why>` in the PR and escalate a
+   public-contract change to the owner.
+
+The `why` skill (B-017) is the lightweight way to find the dependency; it is
+still open, so this checklist is the current fallback.
+
 ## 7. PR (hold until CI green)
 
 When all items pass review, docs are aligned, the UI pass is clean, and the
@@ -339,6 +372,8 @@ pre-push gate is green:
    red, spawn a fixer, re-push, and wait again. Do not merge yourself — hand
    the PR to the user for review and merge.
 7. Close/resolve each completed item in the issue tracker.
+8. In the PR body and the final report, label every claim `measured` /
+   `deduced` / `hypothesis` with its evidence in the same sentence (B-011).
 
 ## Dependency resolution
 
