@@ -77,6 +77,7 @@ reads and obeys it.
 | Main agent never edits code; fresh context per subagent; verbatim diffs | phase 6 | prompt |
 | TDD is red-first for the expected reason and the report cites the red test and its error (B-013) | phase 6 | prompt (implement-loop brief + tdd skill) |
 | Review axes read-only; only the mutation prover applies mutants, in a scratch worktree; implementer/fixer briefs contain no mutation verb (B-007) | `REVIEW-CRITERIA.md` | prompt |
+| Mutation prover: the agent chooses the mutants, `guards/mutation_prover.py` executes them in clean worktrees, control first (B-026/D-046) | phase 6 | script (`guards/mutation_prover.py`; JSONL matrix `pinned`/`blind-test`/`no-test`/`error`; control green = `inconclusive`, exit 1) + prompt (the agent chooses targets and patches) |
 | Evidence quote matches the diff verbatim (criterion 4) | `REVIEW-CRITERIA.md` | script (`audit.py check_reviewer_evidence_verbatim`, every code-claim quote matched against `commit`'s diff) + prompt (`weights.Spec` axis judgment on content) |
 | Every brief item answered, counted by the orchestrator (criterion 7) | `REVIEW-CRITERIA.md` | script (`audit.py check_brief_coverage`, every brief item has a row in `reports/*.jsonl`) + prompt (reviewer emits a row per item) |
 | Every reviewer report is scoped to the audited repo and names its actor (B-004/D-031) | `REVIEW-CRITERIA.md` | script (`audit.py check_report_actor`, every scoped report row has an `actor`; `gather_reviewer_reports` filters by `repo`) |

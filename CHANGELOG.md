@@ -30,7 +30,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - TDD red-first rule (B-013/D-045): the red must fail for the expected reason,
   and the implementer's report cites the red test (`path::name`) and quotes the
   failure, then the green run.
-- `WORKFLOW.md` sync: 36 rules (1 structure, 21 script, 14 prompt).
+- Mutation-prover split (B-026/D-046): the agent writes a manifest of
+  plausible-wrong patches; `guards/mutation_prover.py` applies them in clean
+  worktrees with `PYTHONPATH` on the worktree, runs the control first (green =
+  `inconclusive`), runs the targeted test, emits a JSONL matrix
+  `pinned`/`blind-test`/`no-test`/`error`, and removes the worktrees. `mutmut`
+  remains optional and consultative.
+- `WORKFLOW.md` sync: 37 rules (1 structure, 22 script, 14 prompt).
 
 ## [0.3.0-rc] — 2026-10-15
 

@@ -187,25 +187,47 @@ Run **once, after all three axes have closed** — not on every fix-loop
 iteration. Skip only when the item declares no invariants and has no
 `fatal` acceptance criterion.
 
-The three reviewers are read-only and you never edit code, so the proof
-needs its own role: spawn a **prover subagent**, read-write but confined to
-a **throwaway copy** — `git worktree add ../<repo>-mutprove-<slug> HEAD`,
-a sibling directory, **never inside the repo** (a nested copy is untracked
-content in the session's own diff — WORKFLOW.md, session isolation) and
-never the session's working tree. Its task:
+The three reviewers are read-only and you never edit code. **You choose the
+mutants; a script executes them.** Write the target list and the
+plausible-wrong alternatives as a manifest,
+`reports/<feature>-mutation-manifest.json` (or `mutation-manifest.json`):
 
-1. **The target list**, built by you from the Spec reviewer's report: for
-   each declared law and each `fatal` acceptance criterion, the file and
-   line(s) that implement it and the test(s) that claim to cover it.
-2. **One plausible-wrong mutation per target** — the alternative a
-   competent implementer could have written: normalise instead of passing
-   through, read a sibling column, coalesce a default, flip a boundary
-   (`<` ↔ `<=`), drop a guard, return the input unchanged.
-3. **Run the targeted suite per mutant**, revert it, move to the next.
-4. **Report the matrix** mutant → outcome, and for every mutant the diff
-   that produced it.
-5. **Destroy the copy** (`git worktree remove`) — the proof leaves no
-   branch and no commit behind.
+```json
+{
+  "feature": "<feature>",
+  "base_ref": "HEAD",
+  "pythonpath": "src",
+  "test_command": ["python", "-m", "pytest", "-q", "{test}"],
+  "control": {
+    "id": "M0", "file": "src/x.py", "patch": "--- a/...",
+    "invariant": "control", "test": "tests/test_x.py::test_y"
+  },
+  "mutants": [
+    {"id": "M1", "file": "src/x.py", "patch": "--- a/...",
+     "invariant": "I-impl-1", "test": "tests/test_x.py::test_y",
+     "note": "normalise instead of pass through"}
+  ]
+}
+```
+
+For each declared law and each `fatal` acceptance criterion, add one row:
+the file, the plausible-wrong alternative as a unified diff, the invariant
+it covers, and the test that must become red. The **control** is a
+known-wrong mutant: it must go red first, or the test proves nothing.
+
+Run:
+
+```bash
+python3 guards/mutation_prover.py reports/<feature>-mutation-manifest.json \
+  --repo-root . --out reports/<feature>-mutation.jsonl
+```
+
+The script creates a clean worktree per mutant, sets `PYTHONPATH` on that
+worktree, applies the patch, runs the **control first** (green/no-test →
+matrix `inconclusive`, exit 1), then the targeted test, and removes the
+worktree. The JSONL matrix reports `pinned` / `blind-test` / `no-test` /
+`error` and the diff of every mutant. `mutmut` is optional and consultative,
+never a gate.
 
 **Only the prover mutates** (B-007). The implementer and the fixer never apply
 a mutant, and their task string never contains a mutation verb or a mutation
@@ -216,15 +238,18 @@ the prover.
 
 Reading the matrix:
 
-- **red** → `pinned`. The coverage claim is proven.
-- **green** → `blind-test`, `fatal`: a test exists, exercises the line, and
-  cannot tell right from wrong. This is the defect class that survives
-  every reading of the diff. The fix is a **new assertion or a new witness
-  value**, not a new test file — and the mutant must go red afterwards.
-- **no test to run** → `no-test`, `fatal`, and a *different* finding from
-  `blind-test`. Do not collapse the two: "no coverage" said of a blind test
-  is a false statement about a real problem, and it sends the fixer to
-  write a test that already exists.
+- **pinned** → the coverage claim is proven: the test went red under the
+  mutant.
+- **blind-test** → `fatal`: a test exists, exercises the line, and cannot
+  tell right from wrong. This is the defect class that survives every
+  reading of the diff. The fix is a **new assertion or a new witness value**,
+  not a new test file — and the mutant must go red afterwards.
+- **no-test** → `fatal`, and a *different* finding from `blind-test`. Do not
+  collapse the two: "no coverage" said of a blind test is a false statement
+  about a real problem, and it sends the fixer to write a test that already
+  exists.
+- **error** → the patch or the command failed; fix the manifest, not the
+  test. Re-run before drawing any conclusion.
 
 Findings from the matrix enter the fix loop like any other, and the mutant
 is re-run after the fix.
