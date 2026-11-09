@@ -41,7 +41,11 @@ Spawn an implement subagent with a fresh context window (e.g. `task` in OMP). It
 - **TDD instruction**: tell the subagent to use test-driven development
   (red-green-refactor, vertical slices, tests at public seams). If a `/tdd`
   skill is available, the subagent will follow it; if not, it relies on its
-  own TDD knowledge — the model carries this natively.
+  own TDD knowledge — the model carries this natively. **The red must be the
+  right red**: the test fails for the expected reason (an assertion about
+  behavior, not an import/setup error), and the implementer's report cites the
+  red test (`path::name`) and quotes the failure, then the green run. A test
+  that has never been red is a claim, not a witness (B-013/D-045).
 - **Invariants-first** (when the item body contains a `## System Invariants`
   section, inherited from system-architecture): those invariants are **test
   contract**. The subagent writes their tests **first** — every invariant's
@@ -203,6 +207,13 @@ never the session's working tree. Its task:
 5. **Destroy the copy** (`git worktree remove`) — the proof leaves no
    branch and no commit behind.
 
+**Only the prover mutates** (B-007). The implementer and the fixer never apply
+a mutant, and their task string never contains a mutation verb or a mutation
+recipe: a witness property is *declared*, not executed. A mutant in the
+session's worktree is a process violation, not evidence. After each fixer
+round, inspect `git status` and the key lines before committing or launching
+the prover.
+
 Reading the matrix:
 
 - **red** → `pinned`. The coverage claim is proven.
@@ -229,7 +240,9 @@ If any review finds actionable issues (or an unresolved tension):
 3. **Be explicit in the fix task**: tell the subagent to edit files and run
    tests. A fix subagent that inherits context may plan without acting —
    a fresh context prevents this by forcing you to put every instruction
-   in the task string.
+   in the task string. Never ask the fixer to apply a mutant or to prove a
+   witness by mutation: state the property and leave the proof to the prover
+   (B-007).
 4. When the fix subagent completes, go back to **step 2** (re-review), then
    **step 2b** for any target whose mutant was green.
 5. Exit the loop only when all reviews return **zero actionable findings**,

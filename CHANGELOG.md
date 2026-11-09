@@ -23,7 +23,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `check_i6_zero_actionable` (before this they were defined but inert). The
   schema in `REVIEW-CRITERIA.md` / `implement-loop` gains `repo`, `actor` and
   `status`.
-- `WORKFLOW.md` sync: 35 rules (1 structure, 21 script, 13 prompt).
+- Role isolation prompt reinforcement (B-007/D-031): only the mutation prover
+  applies mutants, in its scratch worktree; implementer/fixer briefs contain
+  no mutation verb or recipe; a mutant in the session worktree is a process
+  violation. The coordinator inspects `git status` after every fixer round.
+- TDD red-first rule (B-013/D-045): the red must fail for the expected reason,
+  and the implementer's report cites the red test (`path::name`) and quotes the
+  failure, then the green run.
+- `WORKFLOW.md` sync: 36 rules (1 structure, 21 script, 14 prompt).
 
 ## [0.3.0-rc] — 2026-10-15
 
