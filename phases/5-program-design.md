@@ -21,3 +21,24 @@ handled, the external frontier's `residual`). At pre-push and in CI the
 ("the code does not exist yet") expires once the implementation lands. The
 declared `exits` are the implementer's test list; the Spec axis judges whether
 each `handled_at` is the right place.
+
+A choice that changes agent behaviour, run cost, or an external contract (CLI
+argv, config keys, wire format, file layout) is a **load-bearing choice**. It
+must appear in the design — `docs/design/<feature>.md` and the appended
+`## Program Design` — as a `## Decision` section with the choice, the rejected
+alternatives, the consequences, and a link to the owner's sign-off comment. A
+design that makes such a choice without it is **incomplete**; the Spec axis
+raises it as `fatal`, quoting the design text as evidence. One section per
+choice; the heading starts with `## Decision`.
+
+A test fixture that stands in for a system the repo does not own (an API
+response, a file produced by another tool, a schema of another service) is an
+**external fixture**: it declares its provenance in the design's `## External
+fixtures` section and in the fixtures manifest named there (default
+`tests/fixtures/PROVENANCE.md`). Each row has `source` — `captured` (a real
+sample, sanitized), `contract` (a named contract document), or `synthetic` (no
+real sample available, with the reason) — plus `reference` and
+`sanitized`/`why`. `guards/check_fixtures.py` validates the manifest's shape
+and that every listed file exists; the Spec axis judges whether the fixture is
+external and whether the source is the right one. A fixture simpler than
+production hides exactly the bug class the work exists to fix.

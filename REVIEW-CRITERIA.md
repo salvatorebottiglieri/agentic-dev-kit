@@ -82,7 +82,24 @@ other access to it):
   right place, and is an external call's `residual` the right policy? →
   `advisory` on a declared-but-wrong place; a signature divergence is already
   `--gate` exit ≠ 0 → `fatal`. Dependency: (e) consumes the design file and
-  the gate's result.
+  the gate's result; (f) load-bearing design choices — a choice that changes
+  agent behaviour, run cost, or an external contract (CLI argv, config keys,
+  wire format, file layout) must appear in the design as a `## Decision`
+  section with the choice, the rejected alternatives, the consequences, and a
+  link to the owner's sign-off comment. A design that makes such a choice
+  without it is incomplete → `fatal`, quoting the design text that makes the
+  choice as evidence. The brief names the design file and this criterion.
+  Dependency: (f) consumes the design file and runs after the design gate,
+  not instead of it. (g) external fixture provenance — for each new/changed
+  fixture that stands in for a system the repo does not own, the manifest
+  named by the design carries a row with `source` (`captured` / `contract` /
+  `synthetic`), `reference`, and `sanitized`/`why`; a missing row, or
+  `synthetic` without a reason, is `fatal` when a contract test uses the
+  fixture and `advisory` otherwise. `guards/check_fixtures.py` proves the
+  row's shape; this criterion judges whether the fixture is external and
+  whether the source is the right one. The brief names the manifest path and
+  this criterion. Dependency: (g) consumes the design's `## External
+  fixtures` section and the fixture diff.
 - **ponytail axis** — the delete-list (`skill://ponytail-review`):
   `delete` / `stdlib` / `native` / `yagni` / `shrink`, with a net
   lines-removable count. Every finding quotes the hunk verbatim →
@@ -90,19 +107,28 @@ other access to it):
   only "could be simpler/shorter"; correctness, security and performance
   are out of scope (routed to the engineering axes). A minimal smoke test
   or `assert` is the ponytail floor, never flagged for deletion.
-- **mutation prover** — the executed half of anti-vacuity, and the only
-  read-write role in the review stage. Scope: **only the lines implementing
-  a declared law or a `fatal` acceptance criterion** — a handful of mutants
-  per ticket, not whole-diff mutation testing. For each, it applies one
-  plausible-wrong alternative (normalise instead of pass through, swap a
-  sibling column, coalesce a default, flip a boundary), runs the targeted
-  suite and records mutant → outcome. **Green mutant = the test is blind**
-  → `fatal`, and the finding ships the mutation diff, so the claim is
-  reproducible instead of trusted. It works in a throwaway copy (scratch
-  worktree), never in the session's working tree: the three review axes
-  stay read-only and the main agent still never edits code. Dependency:
-  runs once after the three axes have closed, not on every fix-loop
-  iteration.
+- **mutation prover** — the executed half of anti-vacuity. The **agent**
+  chooses the targets and the plausible-wrong alternatives; the **script**
+  `guards/mutation_prover.py` executes them, so the mechanical part no longer
+  depends on an LLM remembering to revert a mutant or on an editable venv
+  pointing at the session tree. Scope: **only the lines implementing a
+  declared law or a `fatal` acceptance criterion** — a handful of mutants per
+  ticket, not whole-diff mutation testing. For each target the agent writes a
+  manifest row with one plausible-wrong alternative (normalise instead of pass
+  through, swap a sibling column, coalesce a default, flip a boundary); the
+  script applies it in a clean worktree, sets `PYTHONPATH` on that worktree,
+  runs the **control first** (green/no-test → matrix `inconclusive`, exit 1),
+  then the targeted suite, and emits a JSONL matrix `pinned` / `blind-test` /
+  `no-test` / `error` with each diff. **Green mutant = the test is blind** →
+  `fatal`, and the finding ships the mutation diff, so the claim is
+  reproducible instead of trusted. The script removes every worktree; mutmut
+  is optional and consultative, never a gate. **No other role applies
+  mutants** (B-007): the implementer and the fixer never mutate, their brief
+  contains no mutation verb or mutation recipe, and a mutant in the session's
+  worktree is a process violation, not evidence. The coordinator inspects
+  `git status` after every fixer round, before committing or launching the
+  prover. Dependency: runs once after the three axes have closed, not on every
+  fix-loop iteration.
 
 - **tension resolution** — where the ponytail axis and the engineering
   axes (Standards + Spec) flag the same code in opposite directions
@@ -117,3 +143,78 @@ other access to it):
 
 New criteria enter the registry only for a real, observed defect class —
 the family is curated, not grown by habit.
+
+## Forma intermedia strutturata dei report
+
+> D-025 — emesso 2026-10-15 da B-004. La prosa dei report reviewer
+> "detonava" prima dell'ultimo passo: il coordinatore doveva ricostruirne
+> la struttura, e le regole "verbatim quote" (criterio 4) e "ogni item del
+> brief" (criterio 7) diventavano giudizi, non verifiche. Lo stesso errore
+> dell'SQL tenuto in una stringa. Soluzione: ogni reviewer emette **righe
+> con schema fisso** in un file `reports/<feature>-<axis>.jsonl`, e il
+> markdown per l'umano viene renderizzato da quello.
+
+Ogni reviewer emette **una riga JSON per finding**, newline-delimited
+(JSONL). Lo schema canonico, **owned by this document**:
+
+| campo | tipo | obbligatorio | significato |
+|---|---|---|---|
+| `criterion` | string | sì | riferimento al criterio di `REVIEW-CRITERIA.md` ("4", "7", "I6", "4a", …) |
+| `claim` | enum | no, default `code` | `code` (claim sul codice, richiede `quote` verbatim) o `coverage` (claim di copertura, prova = mutation matrix, niente `quote`) |
+| `premise` | object | no | `{claim, verdict, evidence}` per falsificare le premesse del design (B-025 voce 2). `claim` = testo della premessa, `verdict` = `confirmed` / `falsified` / `untested`, `evidence` = puntatore (`file:riga`, sezione spec, …). Una premessa `untested` senza `evidence` è una violazione. |
+| `item_id` | string | sì | id dell'item del brief a cui il finding risponde ("ADR-0013", "AC-2", "I-impl-line-12", "1.2", …) |
+| `verdict` | enum | sì | `pass` / `fail` / `n/a — motivo` / `actionable` / `pinned` / `blind-test` / `no-test` |
+| `severity` | enum | sì | `fatal` / `advisory` |
+| `file` | string | cond. | path relativo al repo del file del finding |
+| `line` | int | cond. | numero di riga (1-indexed) nel file |
+| `quote` | string | cond. | citazione **verbatim** del diff o del file (richiesta per `criterion=4`; non ammessa per claim di copertura — vedi nota (b) sotto) |
+| `commit` | string | cond. | SHA del commit a cui `quote` si riferisce (per la verifica meccanica) |
+| `reviewer` | enum | sì | `standards` / `spec` / `ponytail` / `mutation` |
+| `repo` | string | sì | `owner/name` del repo di prodotto: `gather_reviewer_reports` usa questo campo per non giudicare i report di un altro progetto |
+| `actor` | string | sì | il sub-agente che ha emesso la riga (es. `spec-1`, `mutation-a`): è il dato che D-031 userà per l'isolamento; un report senza `actor` è una violazione di formato |
+| `status` | enum | no, default `open` | `open` / `resolved` / `fixed` / `deferred`: solo `open` + `severity=fatal` + `verdict=actionable` è una violazione I6 |
+
+**Brief manifest.** Prima di lanciare i reviewer, l'orchestratore scrive
+`reports/<feature>-brief.json` con la lista numerata degli item del brief:
+
+```json
+{"repo": "owner/name", "feature": "<feature>", "items": ["1", "2", "3"]}
+```
+
+`check_brief_coverage` confronta gli `item_id` del report con questa lista:
+un report per una feature senza brief manifest è una violazione, e un brief
+senza report è una violazione (silence is not a verdict). Gli item sono
+stringhe, gli stessi id che il reviewer mette in `item_id`.
+
+**Regole di emissione** (vincolanti per il reviewer, verificate dai check in `audit.py`):
+
+1. **Una riga per ogni item del brief**, anche quando il verdict è `pass`
+   o `n/a — motivo`. Il silenzio non è un verdict (criterio 7). Ogni riga
+   porta il `repo` del prodotto e l'`actor` che l'ha emessa; la stessa feature
+   usa lo stesso `repo` in tutte le righe.
+2. **`quote` per i claim sul codice** (criterio 4, claim (a)). Il testo
+   deve matchare il diff di `commit` **byte per byte**; la verifica è in
+   `audit.py check_reviewer_evidence_verbatim` (voce 8 di B-025).
+3. **Claim di copertura = execution, non quote** (criterio 4, claim (b)).
+   Per "il test discriminava" non si quota il diff: si quota la **matrice
+   mutante→esito** del mutation prover (campo `quote` omesso o lasciato a
+   un puntatore al file della matrice). Una `quote` assente per un finding
+   di copertura non è una violazione.
+4. **`severity=fatal` non accompagnato da fix = violazione I6**. Lo stato
+   è letto in `audit.py check_i6_zero_actionable` (voce 10 di B-025):
+   un finding `verdict=actionable` + `severity=fatal` non risolto (cioè
+   senza un commit successivo che lo chiude) fa uscire il check con
+   violazione.
+5. **Il file `reports/*.jsonl` è append-only**. Riscritture o
+   cancellazioni sono una violazione di processo: la storia è la prova.
+   Il raccoglitore `gather_reviewer_reports()` legge i file di `reports/` e
+   le copie archiviate in `handoffs/*-reports/`, filtra per `repo
+   <owner/name>` e concatena; ogni riga porta il timestamp di emissione dal
+   filesystem. I report precedenti all'introduzione di `repo` non hanno
+   questo campo e vengono ignorati: l'audit non può attribuirli a un progetto
+   e non deve giudicarli contro il repo sbagliato.
+
+**Vista markdown per l'umano**: il coordinatore renderizza un report
+leggibile dal JSONL a chiusura della review (skill `code-review`, fase 6).
+La prosa è generata, non scritta: la fonte unica è la riga strutturata,
+quindi la regola "una fonte sola per fatto" (B-023) si applica anche qui.
