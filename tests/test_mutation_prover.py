@@ -168,6 +168,21 @@ def test_control_green_is_inconclusive_and_stops(tmp_path: Path) -> None:
     assert rows[0]["outcome"] == "inconclusive"
 
 
+def test_control_no_tests_is_inconclusive(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    manifest = _manifest(control={
+        "id": "M0",
+        "file": "src/mod.py",
+        "patch": _break_add(),
+        "invariant": "control",
+        "test": "tests/test_empty.py",
+    })
+    code, rows = _run(tmp_path, manifest, repo)
+    assert code == 1
+    assert len(rows) == 1
+    assert rows[0]["outcome"] == "inconclusive"
+
+
 def test_no_tests_collected_is_no_test(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     manifest = _manifest(control={

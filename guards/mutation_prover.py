@@ -184,9 +184,12 @@ def _run_one(
         proc = _run(command, worktree, env)
         outcome = classify(proc.returncode)
         if kind == "control":
-            outcome = "red" if proc.returncode == 1 else (
-                "inconclusive" if proc.returncode == 0 else "error"
-            )
+            if proc.returncode == 1:
+                outcome = "red"
+            elif proc.returncode in (0, 5):
+                outcome = "inconclusive"
+            else:
+                outcome = "error"
         row.update({
             "outcome": outcome,
             "exit_code": proc.returncode,
