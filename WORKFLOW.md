@@ -78,6 +78,7 @@ reads and obeys it.
 | Review axes read-only; mutation prover only in a scratch worktree | `REVIEW-CRITERIA.md` | prompt |
 | Evidence quote matches the diff verbatim (criterion 4) | `REVIEW-CRITERIA.md` | script (`audit.py check_reviewer_evidence_verbatim`, every code-claim quote matched against `commit`'s diff) + prompt (`weights.Spec` axis judgment on content) |
 | Every brief item answered, counted by the orchestrator (criterion 7) | `REVIEW-CRITERIA.md` | script (`audit.py check_brief_coverage`, every brief item has a row in `reports/*.jsonl`) + prompt (reviewer emits a row per item) |
+| Every reviewer report is scoped to the audited repo and names its actor (B-004/D-031) | `REVIEW-CRITERIA.md` | script (`audit.py check_report_actor`, every scoped report row has an `actor`; `gather_reviewer_reports` filters by `repo`) |
 | Zero actionable findings to exit the fix loop (I6) | phase 6 | script (`audit.py check_i6_zero_actionable`, no `status=open` + `severity=fatal` + `verdict=actionable` row) + prompt (Spec axis judgment on which findings are actionable) |
 | Falsify the premises of the design before publishing (B-025/2) | phase 1 | script (`audit.py check_premises_falsified`, every design premise has verdict `confirmed`/`falsified` + evidence) + prompt (the desiger lists premises) |
 | Phase-2 (product-review) decision stated in every handoff (B-025/3) | General rules | script (`audit.py check_phase2_decision_stated`, every handoff has "Phase 2: done/skipped/n-a") + prompt (the committente states the decision) |

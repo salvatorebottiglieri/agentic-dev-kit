@@ -4,7 +4,7 @@
 Pure check functions (input data -> violations) + a CLI that gathers data
 from the configured tracker via ``gh``. Run in any project:
 
-    python ~/agentic-dev-kit/audit.py --repo owner/repo [--since YYYY-MM-DD]
+    python ~/agentic-workflow/audit.py --repo owner/repo [--since YYYY-MM-DD]
 
 Each check maps to an invariant in INVARIANTS.md; every check must be able
 to fail (see tests/test_audit.py — mutation tests feed deliberately
@@ -22,6 +22,7 @@ from pathlib import Path
 
 WORKFLOW_DIR = Path(__file__).resolve().parent
 HANDOFFS_DIR = WORKFLOW_DIR / "handoffs"
+REPORTS_DIR = WORKFLOW_DIR / "reports"
 ISSUE_REF_RE = re.compile(r"#\d+")
 
 
@@ -614,6 +615,131 @@ def check_brief_coverage(
     return violations
 
 
+def check_report_actor(reports: list[dict]) -> list[str]:
+    """B-004/D-031 — every report row names the sub-agent that emitted it.
+
+    The actor is the data D-031 needs to prove that a reviewer/prover did not
+    write the commit it reviews. The isolation check itself comes later; a
+    missing actor is already a report-format violation.
+    """
+    violations = []
+    for r in reports:
+        if not r.get("actor"):
+            violations.append(
+                f"[B-004] report {r.get('_feature', '?')}/{r.get('item_id', '?')} "
+                "has no actor"
+            )
+    return violations
+
+
+def _feature_axis(path: Path) -> tuple[str, str]:
+    """``agentic-5061-s44-review`` → (``agentic-5061-s44``, ``review``)."""
+    if "-" in path.stem:
+        return tuple(path.stem.rsplit("-", 1))  # type: ignore[return-value]
+    return path.stem, ""
+
+
+def _report_paths(reports_dir: Path, handoffs_dir: Path) -> list[Path]:
+    paths = sorted(reports_dir.glob("*.jsonl")) if reports_dir.is_dir() else []
+    if handoffs_dir.is_dir():
+        paths += sorted(handoffs_dir.glob("*-reports/*.jsonl"))
+    return paths
+
+
+def gather_reviewer_reports(
+    repo: str,
+    reports_dir: Path | None = None,
+    handoffs_dir: Path | None = None,
+) -> list[dict]:
+    """Read the JSONL reviewer reports scoped to *repo* (B-004).
+
+    Old reports have no ``repo`` field and are skipped: the audit cannot know
+    which project they belong to, and judging them against the audited repo
+    would be the same false-positive class as I9. New reports carry ``repo``
+    (REVIEW-CRITERIA.md schema) and are filtered here. Rows are deduplicated
+    because the same report may exist in ``reports/`` and in an archived
+    ``handoffs/*-reports/`` directory.
+    """
+    reports_dir = Path(reports_dir) if reports_dir is not None else REPORTS_DIR
+    handoffs_dir = Path(handoffs_dir) if handoffs_dir is not None else HANDOFFS_DIR
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for path in _report_paths(reports_dir, handoffs_dir):
+        feature, axis = _feature_axis(path)
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"report {path}:{lineno}: invalid JSON: {exc}") from exc
+            if not isinstance(row, dict):
+                raise RuntimeError(f"report {path}:{lineno}: expected a JSON object")
+            if row.get("repo") != repo:
+                continue
+            row = dict(row)
+            row["_feature"] = feature
+            row["_axis"] = axis
+            key = json.dumps(row, sort_keys=True, default=str)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(row)
+    return rows
+
+
+def gather_brief_items(
+    repo: str,
+    reports_dir: Path | None = None,
+    handoffs_dir: Path | None = None,
+) -> dict[str, list[str]]:
+    """Read ``reports/<feature>-brief.json`` manifests scoped to *repo*.
+
+    The orchestrator writes the numbered brief before spawning the reviewers;
+    ``check_brief_coverage`` needs it to know what "every item" means. The
+    file carries ``repo``, ``feature`` and ``items`` (a list of strings).
+    """
+    reports_dir = Path(reports_dir) if reports_dir is not None else REPORTS_DIR
+    handoffs_dir = Path(handoffs_dir) if handoffs_dir is not None else HANDOFFS_DIR
+    paths = sorted(reports_dir.glob("*-brief.json")) if reports_dir.is_dir() else []
+    if handoffs_dir.is_dir():
+        paths += sorted(handoffs_dir.glob("*-reports/*-brief.json"))
+    briefs: dict[str, list[str]] = {}
+    for path in paths:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"brief {path}: invalid JSON: {exc}") from exc
+        if not isinstance(data, dict) or data.get("repo") != repo:
+            continue
+        feature = data.get("feature") or path.stem.removesuffix("-brief")
+        items = data.get("items")
+        if not isinstance(items, list) or not all(isinstance(i, str) for i in items):
+            raise RuntimeError(f"brief {path}: items must be a list of strings")
+        briefs[str(feature)] = items
+    return briefs
+
+
+def gather_pr_diffs(repo: str, reports: list[dict]) -> dict[str, str]:
+    """Fetch the patch of every commit cited by a report (B-004).
+
+    ``check_reviewer_evidence_verbatim`` needs the diff of the report's
+    ``commit``. The commit API is enough: the quote is matched against the
+    patch, not against the PR body. Commits with no textual patch (binary or
+    merge) produce an empty diff and the check reports the quote as missing.
+    """
+    commits = sorted({r["commit"] for r in reports if r.get("commit")})
+    diffs: dict[str, str] = {}
+    for sha in commits:
+        data = _gh(["api", f"repos/{repo}/commits/{sha}"])
+        if not isinstance(data, dict):
+            raise RuntimeError(f"commit {sha}: unexpected API response")
+        parts = [f.get("patch", "").rstrip("\n") for f in data.get("files", [])
+                 if f.get("patch")]
+        diffs[sha] = "\n".join(parts)
+    return diffs
+
+
 def check_handoffs_quote_commands(handoffs: list[dict]) -> list[str]:
     """I10 (weak) — a handoff names the command behind a stated result.
 
@@ -855,6 +981,25 @@ def main() -> int:
         recent_handoffs, gather_known_refs(repo), repo
     )
     violations += check_handoffs_quote_commands(recent_handoffs)
+
+    try:
+        reports = gather_reviewer_reports(repo)
+        briefs = gather_brief_items(repo)
+        pr_diffs = gather_pr_diffs(repo, reports)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    violations += check_report_actor(reports)
+    violations += check_reviewer_evidence_verbatim(reports, pr_diffs)
+    violations += check_i6_zero_actionable(reports)
+    for feature, items in briefs.items():
+        feature_reports = [r for r in reports if r.get("_feature") == feature]
+        violations += check_brief_coverage(feature_reports, items)
+    for feature in sorted({r.get("_feature") for r in reports} - set(briefs)):
+        violations.append(
+            f"[B-004] feature {feature} has reports but no brief manifest "
+            "(reports/<feature>-brief.json)"
+        )
 
     if violations:
         print(f"{len(violations)} violation(s):")

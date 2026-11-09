@@ -116,16 +116,22 @@ writes one **JSONL file** (one row per finding, newline-delimited) to
 `reports/<feature>-<axis>.jsonl`. The schema is the one documented in
 `REVIEW-CRITERIA.md` § "Forma intermedia strutturata dei report" (fields:
 `criterion`, `item_id`, `verdict`, `severity`, `file`, `line`, `quote`,
-`commit`, `reviewer`, `claim`, `premise`). The markdown table the human
-reads is **rendered from the JSONL** at the end of the loop, not written
-first; the JSONL is the only source of truth. The orchestrator verifies
-the format mechanically (`audit.py check_brief_coverage`,
-`check_reviewer_evidence_verbatim`, `check_i6_zero_actionable`): every
-brief item must have a row, every code-claim `quote` must appear in
-the commit's diff, and `status=open + severity=fatal + verdict=actionable`
-blocks the fix loop.
+`commit`, `reviewer`, `claim`, `premise`, `repo`, `actor`, `status`). The
+markdown table the human reads is **rendered from the JSONL** at the end of
+the loop, not written first; the JSONL is the only source of truth. The
+orchestrator verifies the format mechanically (`audit.py check_brief_coverage`,
+`check_reviewer_evidence_verbatim`, `check_i6_zero_actionable`,
+`check_report_actor`): every brief item must have a row, every code-claim
+`quote` must appear in the commit's diff, `status=open + severity=fatal +
+verdict=actionable` blocks the fix loop, and every row names its `repo` and
+`actor`. The actor is the sub-agent that emitted the row, not the axis:
+`spec-1`, `mutation-a`, etc.
 
 **Verify the reviewers like the code — brief coverage is mandatory.**
+Before spawning the reviewers, write `reports/<feature>-brief.json` with
+`{"repo": "owner/name", "feature": "<feature>", "items": ["1", "2", ...]}`:
+the orchestrator and the session-end audit need the list to know what "every
+item" means; a report for a feature with no brief manifest is rejected.
 Enumerate each reviewer's brief as a numbered list of items *before*
 spawning it (Standards: each standards file and each ADR the ticket cites;
 Spec: each `- [ ]` acceptance criterion and each `## System Invariants`

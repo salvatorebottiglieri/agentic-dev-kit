@@ -16,7 +16,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `guards/check_fixtures.py` validates it; the pre-push hook runs it when the
   manifest exists. The producer and reviewer sides are in
   `skills/program-design/SKILL.md` and the Spec axis.
-- `WORKFLOW.md` sync: 34 rules (1 structure, 20 script, 13 prompt).
+- JSONL report wiring (B-004): `audit.py` reads `reports/*.jsonl` and the
+  archived `handoffs/*-reports/`, filters by `repo`, requires `actor`, loads
+  `reports/<feature>-brief.json`, fetches the patch of each cited commit, and
+  **calls** `check_reviewer_evidence_verbatim`, `check_brief_coverage` and
+  `check_i6_zero_actionable` (before this they were defined but inert). The
+  schema in `REVIEW-CRITERIA.md` / `implement-loop` gains `repo`, `actor` and
+  `status`.
+- `WORKFLOW.md` sync: 35 rules (1 structure, 21 script, 13 prompt).
 
 ## [0.3.0-rc] — 2026-10-15
 
