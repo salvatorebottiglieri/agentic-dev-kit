@@ -14,4 +14,11 @@ for f in "$root"/docs/design/*.md "$root"/docs/design/*.json; do
   echo "check-design: ${f#"$root"/}"
   python3 "$tool" "$f" "$root" --gate || status=1
 done
+
+# B-022/D-044 — the default external-fixtures manifest, when the repo has one.
+manifest="$root/tests/fixtures/PROVENANCE.md"
+if [ -e "$manifest" ]; then
+  echo "check-fixtures: tests/fixtures/PROVENANCE.md"
+  python3 "$(dirname "$0")/../check_fixtures.py" "$manifest" "$root" || status=1
+fi
 exit "$status"

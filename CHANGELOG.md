@@ -3,6 +3,21 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `skills/program-design/SKILL.md` — `## Decision` for load-bearing Program
+  Design choices (D-043): behaviour, run-cost or external-contract choices
+  carry the choice, rejected alternatives, consequences and the owner's
+  sign-off; the Spec axis raises a silent one as `fatal`.
+- External-fixture provenance (B-022/D-044): a manifest
+  (`tests/fixtures/PROVENANCE.md` by default) declares `captured` / `contract` /
+  `synthetic` for every fixture standing in for an outside system, and
+  `guards/check_fixtures.py` validates it; the pre-push hook runs it when the
+  manifest exists. The producer and reviewer sides are in
+  `skills/program-design/SKILL.md` and the Spec axis.
+- `WORKFLOW.md` sync: 34 rules (1 structure, 20 script, 13 prompt).
+
 ## [0.3.0-rc] — 2026-10-15
 
 **Release candidate** — allineamento con `agentic-workflow` v0.3.0 (32

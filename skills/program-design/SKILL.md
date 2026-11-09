@@ -172,6 +172,29 @@ A design that makes such a choice without the section is incomplete: the Spec
 axis raises it as `fatal`, quoting the design text as evidence. If the design
 has no load-bearing choice, no `## Decision` is needed.
 
+#### External fixtures (B-022 / D-044)
+
+A test fixture that stands in for a system the repo does not own (an API
+response, a file produced by another tool, a schema of another service)
+declares its provenance. Add an `## External fixtures` section to the design
+listing the systems and the manifest path (default
+`tests/fixtures/PROVENANCE.md`), with one row per external fixture:
+
+```markdown
+| fixture | source | reference | sanitized / why |
+|---|---|---|---|
+| `tests/fixtures/external/jira.json` | captured | Jira dev, 2026-09-03 | removed e-mail |
+| `tests/fixtures/external/stripe.json` | contract | docs/contracts/stripe.md | n/a |
+| `tests/fixtures/external/sast.xml` | synthetic | none available | real report under NDA |
+```
+
+`source` is `captured` (a real sample, sanitized), `contract` (a named contract
+document), or `synthetic` (no real sample, with the reason). Run
+`python3 guards/check_fixtures.py <manifest> .` (add `--scope <dir>` to prove
+no file was forgotten). The Spec axis raises a missing row, or a `synthetic`
+source without a reason, as `fatal` when a contract test uses the fixture. If
+the design has no external fixtures, say so in one line.
+
 ### 3. When to skip (classify the change)
 
 Program design runs **near-always**. Skip only when there is no *shape* to
@@ -283,6 +306,9 @@ If the design makes a load-bearing choice, append one `## Decision` section
 per choice (choice, rejected alternatives, consequences, owner sign-off) after
 the Program Design section; see §2. A design with such a choice and without
 the section is incomplete.
+
+If the design has external fixtures, add an `## External fixtures` section
+naming the systems and the manifest path, and the provenance rows; see §2.
 
 Omit sections that are empty — don't produce "N/A" placeholders.
 
