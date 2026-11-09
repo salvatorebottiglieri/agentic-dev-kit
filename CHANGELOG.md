@@ -16,6 +16,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Unchanged
 - The v0.3.0 rules and skills. v0.4.0 is a packaging/release-hygiene release.
 
+### What's new for users
+- Nothing behavioural beyond v0.3.0: this release makes the public kit a
+  generated, sanitized artifact. The feature list is the v0.3.0 section below.
+
+### Upgrading from v0.3.0
+- Reinstall with `./install.sh` (or check out the `v0.4.0` tag) and keep your
+  existing `AGENT_SKILLS_DIR`; the layout (`skills/`, `guards/`, `install.sh`)
+  is unchanged.
+- `guards/sync_workflow.py` and `tests/test_sync_workflow.py` were removed;
+  the public repository no longer syncs itself.
+- Breaking changes: none.
+
+### Verification
+- 234 tests pass in the generated tree; the export's `--check` reports no
+  drift.
+
 ## [0.3.0] — 2026-11-09
 
 Promuove la `v0.3.0-rc` dopo l'uso in produzione su più repo di prodotto:
