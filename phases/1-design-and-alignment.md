@@ -11,3 +11,9 @@
   down as falsifiable statements and dispatch a scout to refute them *before*
   the spec is published. A premise that dies changes the design tree, and it
   is far cheaper to lose it in phase 1 than to build on it in phase 6.
+- `skill://uml-modeling` — after the spec is published, append `## Model` to
+  the spec with the **flow** and every triggered **statechart** (`## Lifecycle
+  inventory` decides: an entity with a status/lifecycle needs one). The
+  sequence waits for Phase 3, when the components and contracts exist. Skip
+  with `Model skipped — <reason>` only when the feature adds no flow, no
+  interaction and no state.

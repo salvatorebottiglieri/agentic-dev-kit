@@ -26,7 +26,7 @@ design → implement-loop) and the review criteria family that gates a merge.
 | `WORKFLOW.md` | **Start here.** The operational spec — the phases, in order, and the rules. |
 | `INVARIANTS.md` / `INVARIANTS-METHOD.md` | The workflow invariants (I1–I6) the audit enforces, and the theory behind them. |
 | `RATIONALE.md` | The *why* of every load-bearing rule. |
-| `skills/` | The custom skills the workflow invokes (`implement-loop`, `product-review`, `system-architecture`, `modular-monolith`, `program-design`). |
+| `skills/` | The custom skills the workflow invokes (`implement-loop`, `product-review`, `system-architecture`, `modular-monolith`, `program-design`, `uml-modeling`). |
 | `docs/GATES.md` | Gate configuration, `final` mode, bypasses and known limits. |
 | `audit.py` + `tests/` | The session-end gate: verifies the invariants against the tracker. |
 | `handoffs/` | Where your own session handoffs land (starts empty). |
@@ -70,12 +70,25 @@ project instructions file (`CLAUDE.md`, `AGENTS.md`, or your agent's
 equivalent). Then follow its phases. A typo fix, a one-line config change, or a
 question about code does not need the pipeline.
 
+## Model
+
+`uml-modeling` produces the per-feature model in
+`docs/models/<feature>.md`: a flow, the interaction sequences, and a state
+machine for every entity whose lifecycle moves in time. The model is for a
+reader who does not read the code; the `## Elements` table ties every diagram
+ID to a module, symbol, entity or route, and `check_model.py` verifies the
+shape and — with `--gate` — that the skeleton still exists in the code. The
+Python adapter is built in; any other language can pass a `model-facts/1`
+JSON with `--facts` or keep it at `docs/models/facts.json`. The model is
+default-on and skippable with a reason (`Model: n/a — <reason>` in the PR).
+
 ## Gates
 
 `install.sh --gate <repo>` installs two repository-local git hooks, with no
 global config: a **pre-commit** gate that computes skipped tests and stale
-pins into `.workflow/gate-report.md`, and a **pre-push** DesignDoc gate over
-`docs/design/`. A repository without `docs/design/` has nothing to check.
+pins into `.workflow/gate-report.md`, and a **pre-push** gate over
+`docs/design/` and, when present, `docs/models/`. A repository without those
+directories has nothing to check.
 
 Detailed configuration, `final` mode, bypasses and known limits:
 [`docs/GATES.md`](docs/GATES.md).
@@ -89,8 +102,8 @@ Detailed configuration, `final` mode, bypasses and known limits:
   that don't support it can still follow `WORKFLOW.md` and read each
   `skills/<name>/SKILL.md` as a plain instruction file.
 - The custom skills marked *WIP* in their own `SKILL.md`
-  (`product-review`, `system-architecture`, `program-design`) are first
-  versions, not yet battle-tested.
+  (`product-review`, `system-architecture`, `program-design`, `uml-modeling`)
+  are first versions, not yet battle-tested.
 
 ## Versioning
 

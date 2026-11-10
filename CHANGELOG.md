@@ -3,6 +3,51 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-11-10
+
+Aggiunge il modello UML per-feature: flow, sequence e state machine,
+verificati contro il codice.
+
+### Added
+- `skills/uml-modeling/` — tre checkpoint (dopo lo spec, dopo
+  l'architettura, prima della PR), scheletro `ModelFacts`, tabella
+  `## Model changes` con approvazione, trigger delle statechart, regole di
+  skip.
+- `guards/check_model.py` — valida la forma del modello, richiede un URL di
+  approvazione per ogni cambio semantico e, con `--gate`, risolve
+  `## Elements` contro i fatti del codice; pre-push hook quando esiste
+  `docs/models/`.
+- `guards/model_facts_python.py` — adapter Python `ast` per
+  `model-facts/1` (moduli, simboli, chiamate, route, stati enum); `--facts`
+  è l'escape hatch per gli altri linguaggi.
+- `audit.py check_model_declared` — ogni PR merged dopo il 2026-11-10
+  dichiara `Model: <path>` o `Model: n/a — <reason>`.
+- Spec axis (h) in `REVIEW-CRITERIA.md`.
+
+### Changed
+- `system-architecture` non produce più diagrammi sequence/state: possiede
+  contratti, data model e invarianti e punta a `uml-modeling`.
+- La Fase 1 appende `## Model` (flow + statechart); la Fase 3 aggiunge la
+  sequence e riconcilia; la Fase 6 produce l'as-built
+  `docs/models/<feature>.md`.
+- `WORKFLOW.md` elenca `uml-modeling` nelle fasi 1, 3, 6 e le righe di
+  enforcement del modello.
+- `install.sh` linka la sesta skill custom.
+
+### What's new for users
+- Chi non legge il codice ottiene un modello a livello di dominio con uno
+  scheletro verificabile, e ogni cambio semantico porta l'approvazione del
+  owner.
+
+### Upgrading from v0.5.0
+- Reinstallare con `./install.sh`: l'installer linka `uml-modeling`.
+- I repo con `docs/models/` ricevono il gate pre-push; quelli senza non sono
+  toccati. Breaking changes: nessuna.
+
+### Verification
+- 275 test nel repo canonico, 258 nel kit generato; export `--check` senza
+  drift.
+
 ## [0.5.0] — 2026-11-09
 
 Aggiunge la skill `modular-monolith` e separa il README dalla reference dei

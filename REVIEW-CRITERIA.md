@@ -99,7 +99,23 @@ other access to it):
   row's shape; this criterion judges whether the fixture is external and
   whether the source is the right one. The brief names the manifest path and
   this criterion. Dependency: (g) consumes the design's `## External
-  fixtures` section and the fixture diff.
+  fixtures` section and the fixture diff. (h) feature model — the PR declares
+  `Model: docs/models/<feature>.md` (or `Model: n/a — <reason>`); for a
+  non-skipped feature the file exists, `guards/check_model.py --gate` exits
+  0, the `## Lifecycle inventory` says whether each entity moves in time, and
+  every entity that does has a statechart. The reviewer re-derives the
+  triggers from the spec/diff — status/state, enum, job/queue, retry,
+  approval, onboarding, document lifecycle — and flags an entity marked
+  "no" that should be "yes". A missing model, a missing statechart for a
+  lifecycle entity, or a semantic change without a `## Model changes` row
+  linking the owner's approval is `fatal`; a higher-level aggregate that is
+  not updated when it exists is `advisory` until the v2–v4 levels land. The
+  checker proves the structure, the URL and the enum-vs-state drift; this
+  criterion judges whether the change is semantic, whether the approval is
+  the owner's, whether it happened before the code, and whether the state
+  names are the right domain states. Dependency: (h) consumes the model
+  file, the lifecycle inventory and the gate's result; it runs after the
+  design gate, not instead of it.
 - **ponytail axis** — the delete-list (`skill://ponytail-review`):
   `delete` / `stdlib` / `native` / `yagni` / `shrink`, with a net
   lines-removable count. Every finding quotes the hunk verbatim →

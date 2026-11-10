@@ -24,6 +24,8 @@ WORKFLOW_DIR = Path(__file__).resolve().parent
 HANDOFFS_DIR = WORKFLOW_DIR / "handoffs"
 REPORTS_DIR = WORKFLOW_DIR / "reports"
 ISSUE_REF_RE = re.compile(r"#\d+")
+MODEL_RULE_SINCE = "2026-11-10"
+MODEL_DECL_RE = re.compile(r"^Model:\s*(.+)$", re.M | re.I)
 
 
 # ── Pure checks ──────────────────────────────────────────────────────
@@ -40,6 +42,69 @@ def check_pr_links_issue(prs: list[dict]) -> list[str]:
             violations.append(
                 f"[I4] PR #{pr['number']} merged but links no issue in its body"
             )
+    return violations
+
+
+def check_model_declared(
+    prs: list[dict], since: str = MODEL_RULE_SINCE
+) -> list[str]:
+    """D-051 — a merged PR after the rule's effective date declares its model.
+
+    The body carries ``Model: docs/models/<feature>.md`` or
+    ``Model: n/a — <reason>``. The checker proves the declaration exists and
+    is shaped like a path or a reasoned skip; it cannot prove that the file is
+    the right one — that is the Spec axis (h). PRs merged before the rule's
+    effective date are out of scope, so the check does not fail history.
+    """
+    cutoff = max(since, MODEL_RULE_SINCE) if since else MODEL_RULE_SINCE
+    violations: list[str] = []
+    for pr in prs:
+        if not pr.get("merged"):
+            continue
+        merged_at = str(pr.get("mergedAt") or "")[:10]
+        if merged_at and merged_at < cutoff:
+            continue
+        body = pr.get("body") or ""
+        match = MODEL_DECL_RE.search(body)
+        if not match:
+            violations.append(
+                f"[D-051] PR #{pr.get('number', '?')} merged without a "
+                f"`Model:` line (path or `n/a — reason`)"
+            )
+            continue
+        value = match.group(1).strip().strip("`").strip()
+        if not value:
+            violations.append(
+                f"[D-051] PR #{pr.get('number', '?')} has an empty `Model:` line"
+            )
+            continue
+        if value.lower().startswith("n/a"):
+            reason = re.sub(r"^n/a\s*[—:-]\s*", "", value, flags=re.I).strip()
+            if not reason or reason.lower() == "n/a":
+                violations.append(
+                    f"[D-051] PR #{pr.get('number', '?')} says `Model: n/a` "
+                    "without a reason"
+                )
+            continue
+        path_match = re.search(r"docs/models/[^\s`]+\.md", value)
+        if not path_match:
+            violations.append(
+                f"[D-051] PR #{pr.get('number', '?')} `Model:` does not point "
+                f"to docs/models/*.md (got {value!r})"
+            )
+            continue
+        declared = path_match.group(0)
+        files = pr.get("files") or []
+        if files:
+            paths = {
+                item.get("path") if isinstance(item, dict) else item
+                for item in files
+            }
+            if declared not in paths:
+                violations.append(
+                    f"[D-051] PR #{pr.get('number', '?')} declares "
+                    f"`Model: {declared}` but that file is not in the PR diff"
+                )
     return violations
 
 
@@ -87,7 +152,7 @@ def check_skip_annotations(issues: list[dict]) -> list[str]:
         text = "\n".join(
             [issue.get("body") or "", *((c.get("body") or "") for c in comments)]
         )
-        if "Skipped" in text or any(m in text for m in SPEC_MARKERS):
+        if "skipped" in text.lower() or any(m in text for m in SPEC_MARKERS):
             continue
         violations.append(
             f"[I3] issue #{issue['number']} closed without a spec section "
@@ -778,7 +843,7 @@ def gather_prs(repo: str, since: str) -> list[dict]:
     prs = _gh([
         "pr", "list", "--repo", repo, "--state", "merged",
         "--search", f"merged:>={since}",
-        "--json", "number,mergedAt,body,headRefOid",
+        "--json", "number,mergedAt,body,headRefOid,files",
     ])
     for pr in prs:
         try:
@@ -963,6 +1028,7 @@ def main() -> int:
         return 1
 
     violations += check_pr_links_issue(prs)
+    violations += check_model_declared(prs, since)
     violations += check_ci_before_merge(prs)
     violations += check_skip_annotations(issues)
 

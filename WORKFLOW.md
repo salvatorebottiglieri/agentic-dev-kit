@@ -40,12 +40,12 @@ The phase file holds the phase's own rules.
 
 | # | Phase | Skill(s) | Rules |
 |---|---|---|---|
-| 1 | Design & alignment | `grill-with-docs`, `domain-modeling`, `to-spec` | `phases/1-design-and-alignment.md` |
+| 1 | Design & alignment | `grill-with-docs`, `domain-modeling`, `to-spec`, `uml-modeling` | `phases/1-design-and-alignment.md` |
 | 2 | Product review (only when the feature touches UI) | `product-review` | `phases/2-product-review.md` |
-| 3 | System architecture (only when non-trivial) | `system-architecture`, `modular-monolith` | `phases/3-system-architecture.md` |
+| 3 | System architecture (only when non-trivial) | `system-architecture`, `modular-monolith`, `uml-modeling` | `phases/3-system-architecture.md` |
 | 4 | Tickets | `to-tickets` | below |
 | 5 | Program design (near-always) | `program-design` | `phases/5-program-design.md` |
-| 6 | Implement-loop | `implement-loop`, `code-review`, `ponytail-review` | `phases/6-implement-loop.md` |
+| 6 | Implement-loop | `implement-loop`, `code-review`, `ponytail-review`, `uml-modeling` | `phases/6-implement-loop.md` |
 
 Transversal files:
 
@@ -78,6 +78,10 @@ reads and obeys it.
 | The DesignDoc passes its checks (signatures, coherence, four exits, frontier) | phase 5 + pre-push | script (`guards/check_design.py`, pre-push hook) + prompt (Spec axis judges `handled_at`) |
 | Load-bearing Program Design choices carry a `## Decision` (choice, rejected alternatives, consequences, owner sign-off) — D-043 | phase 5 + phase 6 (Spec axis) | prompt (a silent load-bearing choice is `fatal` in the Spec axis; trigger: a load-bearing choice reaches a merge without `## Decision` → add `decisions[]` to the design JSON block and validate it with `guards/check_design.py`) |
 | External-system fixtures declare provenance (`captured` / `contract` / `synthetic`) in the design and a fixtures manifest — D-044 | phase 5 + phase 6 (Spec axis) | script (`guards/check_fixtures.py` validates the manifest and the listed files; pre-push hook when `tests/fixtures/PROVENANCE.md` exists) + prompt (Spec axis (g) judges which fixtures are external and whether the source is right) |
+| Feature model exists and is declared in the PR (`Model:`), with the as-built gate | phase 6 | script (`guards/check_model.py --gate`; `audit.py check_model_declared` on merged PRs, including that the declared file is in the PR diff) + prompt (the PR body and Spec axis (h)) |
+| A semantic model change carries a link to the owner's approval (`## Model changes`) | phase 6 | script (`check_model.py` requires a URL per row) + prompt (Spec axis (h) judges validity and that it happened before the code) |
+| An entity whose lifecycle moves in time has a statechart | phase 6 (script) + phases 1, 3 (prompt) | script (`check_model.py` at as-built: inventory count, one `### <Entity>` per moving entity, enum-vs-state drift) + prompt (Spec axis (h) re-derives the trigger at design time) |
+| Aggregate model levels updated by altitude when they exist | phase 6 | prompt (Spec axis (h); levels are v2–v4) |
 | Main agent never edits code; fresh context per subagent; verbatim diffs | phase 6 | prompt |
 | TDD is red-first for the expected reason and the report cites the red test and its error (B-013) | phase 6 | prompt (implement-loop brief + tdd skill) |
 | Claims in final reports and handoffs carry evidence or the label `measured` / `deduced` / `hypothesis` (B-011) | General rules | prompt |

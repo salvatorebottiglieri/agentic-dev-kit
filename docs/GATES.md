@@ -154,3 +154,36 @@ python3 guards/check_design.py docs/design/<feature>.md . --gate   # pre-push/CI
 `*.json`) in the repository at push time; it is installed by the same
 `core.hooksPath` as the pre-commit gate (`./install.sh --gate <repo>`). A
 repository without `docs/design/` has nothing to check.
+
+### Feature-model gate (pre-push)
+
+A repository that keeps feature models in `docs/models/*.md` gets a third
+gate. The model is Markdown with a front matter, `## Lifecycle inventory`,
+`## Elements`, the Mermaid diagrams and `## Model changes`.
+`guards/check_model.py` checks it:
+
+```bash
+python3 guards/check_model.py docs/models/<feature>.md --gate
+python3 guards/check_model.py docs/models/<feature>.md --gate --facts facts.json
+```
+
+- **shape** — front matter, required sections, a Mermaid block of the
+  expected kind (the syntax is the renderer's job), unique IDs, a lifecycle
+  inventory that says yes/no for every entity.
+- **lifecycle** — every entity marked "moves in time" needs a state diagram;
+  the count must match, one per `### <Entity>` heading.
+- **approval** — every `## Model changes` row carries an `https://` URL; a
+  semantic change without one is a structural failure.
+- **drift** — with `--gate`, every `## Elements` row is resolved against the
+  code facts: a module, symbol, entity or route that no longer exists fails
+  the gate. A `### <Entity>` state machine is compared with the code's enum
+  values (case-insensitive): a state added in code and missing in the model,
+  or invented in the model, fails.
+- **facts** — the Python adapter is built in; another language passes a
+  `model-facts/1` JSON with `--facts`, or keeps it at
+  `docs/models/facts.json` (auto-detected).
+
+`guards/hooks/pre-push` runs `--gate --strict` over `docs/models/` when the
+directory exists. `--strict` means a repo with models but no facts provider
+fails visibly instead of passing on structure alone. The hook is installed by
+the same `core.hooksPath` as the other gates (`./install.sh --gate <repo>`).

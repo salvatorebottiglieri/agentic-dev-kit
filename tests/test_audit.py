@@ -22,6 +22,7 @@ from audit import (
     check_handoffs_quote_commands,
     check_i6_zero_actionable,
     check_invariant_verification_exists,
+    check_model_declared,
     check_phase2_decision_stated,
     check_pr_links_issue,
     check_premises_falsified,
@@ -66,6 +67,72 @@ def test_pr_links_issue_ignores_open_prs():
     assert check_pr_links_issue(prs) == []
 
 
+# ── D-051: model declared in the PR ──────────────────────────────────
+
+
+def test_model_declared_compliant():
+    prs = [{
+        "number": 1, "merged": True, "mergedAt": "2026-11-11T10:00:00Z",
+        "body": "Model: docs/models/demo.md",
+        "files": [{"path": "docs/models/demo.md"}],
+    }]
+    assert check_model_declared(prs) == []
+
+
+def test_model_declared_reasoned_skip():
+    prs = [{
+        "number": 2, "merged": True, "mergedAt": "2026-11-11T10:00:00Z",
+        "body": "Model: n/a — pure config change",
+    }]
+    assert check_model_declared(prs) == []
+
+
+def test_model_declared_missing_is_a_violation():
+    prs = [{
+        "number": 3, "merged": True, "mergedAt": "2026-11-11T10:00:00Z",
+        "body": "Fixes #1",
+    }]
+    violations = check_model_declared(prs)
+    assert any("[D-051]" in v and "#3" in v for v in violations), violations
+
+
+def test_model_declared_n_a_without_reason_is_a_violation():
+    prs = [{
+        "number": 4, "merged": True, "mergedAt": "2026-11-11T10:00:00Z",
+        "body": "Model: n/a",
+    }]
+    violations = check_model_declared(prs)
+    assert any("without a reason" in v for v in violations), violations
+
+
+def test_model_declared_ignores_prs_before_the_rule():
+    prs = [{
+        "number": 5, "merged": True, "mergedAt": "2026-11-09T10:00:00Z",
+        "body": "old PR without a model line",
+    }]
+    assert check_model_declared(prs) == []
+
+
+def test_model_declared_requires_docs_models_path():
+    prs = [{
+        "number": 6, "merged": True, "mergedAt": "2026-11-11T10:00:00Z",
+        "body": "Model: README.md",
+        "files": [{"path": "README.md"}],
+    }]
+    violations = check_model_declared(prs)
+    assert any("docs/models" in v for v in violations), violations
+
+
+def test_model_declared_file_must_be_in_diff():
+    prs = [{
+        "number": 7, "merged": True, "mergedAt": "2026-11-11T10:00:00Z",
+        "body": "Model: docs/models/demo.md",
+        "files": [{"path": "src/app.py"}],
+    }]
+    violations = check_model_declared(prs)
+    assert any("not in the PR diff" in v for v in violations), violations
+
+
 # ── I1: CI green before merge ────────────────────────────────────────
 
 
@@ -106,6 +173,14 @@ def test_skip_annotations_compliant_with_skip_note():
     issues = [{
         "number": 8, "state": "CLOSED",
         "body": "Skipped — API-only, no product-review",
+    }]
+    assert check_skip_annotations(issues) == []
+
+
+def test_skip_annotations_accepts_lowercase_model_skip():
+    issues = [{
+        "number": 8, "state": "CLOSED",
+        "body": "Model skipped — no flow, no state",
     }]
     assert check_skip_annotations(issues) == []
 

@@ -15,6 +15,13 @@ for f in "$root"/docs/design/*.md "$root"/docs/design/*.json; do
   python3 "$tool" "$f" "$root" --gate || status=1
 done
 
+# D-051 — the feature-model gate: shape + drift of the mechanical skeleton.
+models_dir="$root/docs/models"
+if [ -d "$models_dir" ]; then
+  echo "check-model: docs/models/"
+  python3 "$(dirname "$0")/../check_model.py" --root "$root" --gate --strict || status=1
+fi
+
 # B-022/D-044 — the default external-fixtures manifest, when the repo has one.
 manifest="$root/tests/fixtures/PROVENANCE.md"
 if [ -e "$manifest" ]; then

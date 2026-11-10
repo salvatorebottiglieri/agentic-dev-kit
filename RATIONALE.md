@@ -849,3 +849,54 @@ rule **visible**, not just promised. `check_invariant_verification_
   senza riscrivere le leggi. La lettura come ramo della fase 3 evita una fase
   nuova e non aggiunge carico di contesto agli agenti che non hanno un
   modular monolith.
+
+## D-051 — Il modello UML per-feature è un artefatto verificabile, non un disegno (2026-11-10)
+
+- **Decision.**
+  1. **Tre checkpoint, un artefatto.** Dopo la Fase 1 il modello vive nello
+     spec come `## Model` (flow + statechart); dopo la Fase 3 si aggiunge la
+     sequence e si riconcilia; in Fase 6 diventa `docs/models/<feature>.md`.
+     Il design snapshot resta nello issue come storia.
+  2. **Scheletro + semantica.** Un adapter estrae dal codice i fatti
+     meccanici (`model-facts/1`: moduli, simboli, chiamate, route, stati);
+     l'agente autora la semantica (passi, ordine, transizioni, confini). Il
+     checker confronta i due; il codice non è una seconda fonte da mantenere.
+  3. **Statechart a trigger.** Un'entità con `status`/`state`, enum, job,
+     retry, approvazioni, onboarding multi-step o lifecycle documentale ha
+     bisogno della statechart; se non ne ha, l'inventario lo dichiara.
+  4. **Approvazione esplicita.** Una variazione semantica in implementazione
+     è una scelta load-bearing: si ferma il loop prima del codice, si pubblica
+     un `## Decision`, si aspetta il commento del owner e si linka in
+     `## Model changes`. Le variazioni meccaniche non entrano in tabella.
+  5. **Skip visibile.** `Model skipped — <reason>` / `Model: n/a — <reason>`;
+     l'assenza di un modello non è mai silenziosa.
+- **Rationale.** Un diagramma che nessuno verifica marcisce; un diagramma
+  interamente generato non dice nulla che il codice non dica già. La divisione
+  scheletro/semantica tiene il modello leggibile da un umano e ancorato al
+  codice dove è possibile. L'approvazione esplicita impedisce che
+  l'implementazione riscriva il design senza che il owner lo sappia.
+
+## D-052 — La vista d'insieme è un modello a livelli, non la somma dei modelli per-feature (2026-11-10)
+
+- **Decision.**
+  1. **Livelli.** `feature → area → sistema`, con lo stesso formato e lo
+     stesso guard del per-feature; statechart per entità. Staging: v1
+     per-feature, v2 entità + indice, v3 aree, v4 sistema.
+  2. **Confini dalla Fase 3.** Le aree sono i moduli/componenti della mappa di
+     Fase 3 / `modular-monolith`. Se i confini non sono chiari è un finding,
+     non un'area `core` inventata: si escala alla Fase 3 o a un ticket di
+     refactor.
+  3. **Aggiornamento per altezza.** Nella stessa PR: feature-local → solo
+     feature; cross-boundary → area + entità; system-level → sistema.
+     Spostare un confine è una `## Decision` approvata e la Fase 3 non è
+     saltabile.
+  4. **Navigazione generata.** `docs/models/README.md` è una proiezione dal
+     front-matter e dai fatti (tabelle + mappa delle aree); `--check`
+     fallisce se è stantia. Nessuno la scrive a mano.
+  5. **Limite del livello sistema.** Context, aree e al massimo 3–5 flussi
+     cross-area. Oltre il limite il problema sono i confini, non la
+     documentazione.
+- **Rationale.** Un livello aggregato scritto a mano è una seconda fonte di
+  verità; uno generato interamente non racconta il dominio. Riusare formato,
+  guard e approvazione evita un secondo processo. Il limite sui flussi rende
+  visibile il debito di confini invece di nasconderlo in un atlante.

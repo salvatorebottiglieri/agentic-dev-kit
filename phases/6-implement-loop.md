@@ -50,6 +50,16 @@
 - UI items: browser verification pass before PR — drive the built UI in a
   real browser through the personas and edge cases from the phase-2 success
   criteria, checking usability, not just appearance
+- **model as-built**: before the PR, `docs/models/<feature>.md` exists and
+  `python3 guards/check_model.py --gate` exits 0; the PR body carries
+  `Model: <path>` (or `Model: n/a — <reason>`). Every **semantic** delta from
+  the design has a `## Model changes` row linking the owner's approval; the
+  `## Lifecycle inventory` decides whether a statechart is due. A semantic
+  delta without approval is a Spec-axis `fatal` (criterion h).
+- when the aggregate levels exist (`docs/models/areas/`, `system.md`), update
+  them by altitude: feature-local → feature only; cross-boundary → area +
+  entity; system-level → system. Moving a boundary is a `## Decision` with
+  owner sign-off and Phase 3 is not skippable.
 - docs alignment, then the pre-push gate (canonical test + lint), then PR
   held open until CI is green
 - **before the PR**, the coordinator writes `Risk: low|med|high`,

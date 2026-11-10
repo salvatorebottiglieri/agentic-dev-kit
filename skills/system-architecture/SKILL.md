@@ -1,9 +1,10 @@
 ---
 name: system-architecture
 description: >
-  Produce architecture diagrams and contracts (Mermaid sequence/state diagrams,
-  endpoint contracts, data models) for a PRD and append them to the issue on
-  the tracker. Use between /to-spec and /to-tickets to align on how services
+  Produce architecture contracts (endpoint contracts, data models, system
+  invariants) for a PRD and append them to the issue on the tracker. The
+  sequence/state diagrams are owned by `uml-modeling`, which runs at the end
+  of this phase. Use between /to-spec and /to-tickets to align on how services
   communicate before breaking work into tickets.
 disable-model-invocation: true
 ---
@@ -43,8 +44,8 @@ Not every feature needs all three artifacts. Classify based on the PRD:
 
 | If the PRD touches… | Produce |
 |---|---|
-| Multiple services / components + API | Sequence diagram + endpoint contracts + data model |
-| A stateful workflow (order status, onboarding steps) | State diagram + data model |
+| Multiple services / components + API | Endpoint contracts + data model + `uml-modeling` (sequence) |
+| A stateful workflow (order status, onboarding steps) | Data model + `uml-modeling` (statechart) |
 | Only data (new field, new table, no new orchestration) | Data model only |
 | Only existing patterns (follows existing routes exactly) | Skip — no new architecture needed |
 
@@ -64,59 +65,16 @@ suite that doesn't pin the invariants verifies scenarios, not laws).
 ### 3. Produce artifacts
 
 For each artifact type that fits, produce a draft. Use `CONTEXT.md` vocabulary
-for all names. Do **not** write implementation code — only contracts and flows.
+for all names. Do **not** write implementation code — only contracts, data
+models and invariants; `uml-modeling` owns the diagrams.
 
-#### Mermaid sequence diagram
+#### Diagrams
 
-Produce when the feature introduces new interactions between services,
-components, or external systems.
-
-````markdown
-```mermaid
-sequenceDiagram
- + = new  ~ = modified  - = removed
-  participant API
-  participant ResourceService
-  participant Store
-
-  UI->>API: PUT /resources/:slug
-  API->>ResourceService: create(input)
-  ResourceService->>Store: insert resource
-  ResourceService-->>UI: 201 resource
-```
-````
-
-**Rules:**
-- Every participant is a real component, service, or external system (not every function).
-- Messages are real operations, not generic "process data".
-- Return arrows (`-->>`) carry the response; request arrows (`->>`) carry the payload.
-- Limit to the scope of THIS feature — existing infrastructure is background, not part of the diagram.
-- If the feature has multiple flows (happy path, error path, edge case), use separate diagrams with clear labels.
-
-#### Mermaid state diagram (stateDiagram-v2)
- + = created  ~ = modified  - = removed
-Produce when the feature involves a stateful workflow with explicit transitions
-(order lifecycle, document status, onboarding steps, job pipeline).
-
-````markdown
-```mermaid
-stateDiagram-v2
-  [*] --> Draft
-  Draft --> Published : publish()
-  Published --> Archived : archive()
-  Archived --> [*]
-
-  note right of Published
-    Can be viewed by all users
-  end note
-```
-````
-
-**Rules:**
-- States are domain concepts from `CONTEXT.md`, not implementation states.
-- Transitions name the action that triggers them, not the condition.
-- Use `note` blocks only for non-obvious semantics.
-- If the state machine already exists and the feature only adds one transition, use diff notation in comments.
+The sequence and state diagrams are owned by `skill://uml-modeling`: run it at
+the end of this phase to add `## Sequence` and to reconcile the flow and the
+statecharts with the architecture. Do **not** append diagrams here: this
+skill produces the contracts they refer to, and duplicating them would create
+a second source that drifts.
 
 #### Endpoint contracts
 
@@ -139,7 +97,7 @@ GET /api/resources/:slug
 ````
 
 **Rules:**
-- Every endpoint that the sequence diagram references MUST have a contract here.
+- Every endpoint that the model's sequence diagram references MUST have a contract here.
 - Include request shape, response shape, and possible errors.
 - Use the domain types from `CONTEXT.md` — if `Resource` is defined in the glossary, reference it.
 - If the existing API follows a documented pattern (all routes return `{ data }` wrapping), follow it.
@@ -235,19 +193,10 @@ relevant:
 
 <table + flowchart from skill://modular-monolith>
 
-### Interaction flow
+### Model
 
-```mermaid
-sequenceDiagram
-...
-```
-
-### State machine (if applicable)
-
-```mermaid
-stateDiagram-v2
-...
-```
+The flow, sequence and state diagrams live in the spec's `## Model`, produced
+by `skill://uml-modeling`. Link it here; do not duplicate the diagrams.
 
 ### Endpoint contracts
 
@@ -284,9 +233,9 @@ before tickets are created.
 Do **not** proceed to tickets or implementation. Report what was produced and
 ask:
 
-> "The architecture for this PRD is ready. The diagrams and contracts
-> describe how the services communicate. Would you like to modify anything
-> or proceed with to-tickets?"
+> "The architecture for this PRD is ready. The contracts describe what the
+> services exchange; the diagrams live in the model. Would you like to modify
+> anything or proceed with to-tickets?"
 
 If the user corrects anything, incorporate the fix and re-append the section
 (overwrite the previous one). Only when they approve does the PRD move back
@@ -298,6 +247,7 @@ to `ready-for-agent` — or directly to `to-tickets`.
 |---|---|
 | **to-tickets** | Reads the PRD (now with `## System Architecture`) and creates tickets informed by the endpoint contracts and data model. Each ticket inherits its piece of the architecture. |
 | **program-design** | Works one ticket deeper: call-stack tree, file-tree diff, type signatures. The architecture says *which* endpoint, program design says *how*. |
+| `uml-modeling` | Owns the sequence and state diagrams that this skill references; runs at the end of the phase, once the contracts exist. |
 | **implement-loop** | The implement subagent sees the full ticket body — architecture context, `## System Invariants`, and program design signatures. The invariants are test contract: their tests are written first (red), then the implementation (green). |
 | `to-spec` | Produces the PRD. System architecture evolves it — adds the `## System Architecture` section. |
 | `modular-monolith` | Runs at step 2 for modular monoliths; its output is the module map, the module invariants and the fitness function. |
@@ -315,11 +265,12 @@ Classify the PRD before producing artifacts. Skip if:
 | **Trivial feature** | "Add phone field to profile" — follows existing pattern |
 | **Data only** | New table, no new endpoints or orchestration — data model only |
 
-**Mechanical refactor** and **follows existing pattern** skip the
-diagrams/contracts but NOT the invariant elicitation: if the touched module
-has domain laws (documented or new), the `## System Invariants` section must
-still be written (possibly reduced — law, negation, where verified); if
-there are none, the skip annotation must state "no domain laws" explicitly.
-The criteria judge domain value, not diff shape.
+**Mechanical refactor** and **follows existing pattern** skip the contracts
+but NOT the invariant elicitation: if the touched module has domain laws
+(documented or new), the `## System Invariants` section must still be written
+(possibly reduced — law, negation, where verified); if there are none, the
+skip annotation must state "no domain laws" explicitly. The criteria judge
+domain value, not diff shape. The diagram decision belongs to
+`uml-modeling`; this skill does not produce them.
 
 
