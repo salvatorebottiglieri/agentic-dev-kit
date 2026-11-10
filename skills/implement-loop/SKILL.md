@@ -99,7 +99,7 @@ When the implement subagent completes, spawn three `reviewer` subagents:
   When the item body has a `## System Invariants` section, additionally
   verify **invariant coverage**: every invariant has a test pinning its
   negation, and the test would fail on a violation (not vacuously green).
-- **Ponytail review**: run `/ponytail-review` against the same diff. It
+- **Ponytail review**: run `/ponytail-lean` against the same diff. It
   returns a structured delete-list (`delete` / `stdlib` / `native` / `yagni`
   / `shrink`) with a net lines-removable count. This axis finds complexity
   to remove, not correctness — if the report says "Lean already. Ship.",

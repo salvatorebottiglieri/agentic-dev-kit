@@ -144,7 +144,7 @@ Each entry keeps the decision and its rationale; the private session evidence st
 ## D-010 — Tightrope folded into the review: ponytail axis + tension resolution (2026-08-30)
 
 - **Decision.** WORKFLOW.md phase 7 removed; phase 6 review gains the
-  **ponytail axis** (delete-list via `/ponytail-review`) as a third
+  **ponytail axis** (delete-list via `/ponytail-lean`) as a third
   orthogonal axis alongside Standards + Spec, plus a **tension-resolution**
   criterion: balanced by default (every real tension escalates to the human
   with both sides stated), or lean (`--lean ponytail` / `--lean engineering`)

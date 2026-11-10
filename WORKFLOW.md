@@ -45,7 +45,7 @@ The phase file holds the phase's own rules.
 | 3 | System architecture (only when non-trivial) | `system-architecture`, `modular-monolith`, `uml-modeling` | `phases/3-system-architecture.md` |
 | 4 | Tickets | `to-tickets` | below |
 | 5 | Program design (near-always) | `program-design` | `phases/5-program-design.md` |
-| 6 | Implement-loop | `implement-loop`, `code-review`, `ponytail-review`, `uml-modeling` | `phases/6-implement-loop.md` |
+| 6 | Implement-loop | `implement-loop`, `code-review`, `ponytail-lean`, `uml-modeling` | `phases/6-implement-loop.md` |
 
 Transversal files:
 

@@ -11,7 +11,7 @@
   red test (`path::name`) and quotes the failure, then the green run. A test
   that has never been red is a claim, not a witness (B-013/D-045)
 - review as a criteria family: Standards + Spec axes (`skill://code-review`)
-  plus the **ponytail axis** (`skill://ponytail-review`, the delete-list) —
+  plus the **ponytail axis** (`skill://ponytail-lean`, the delete-list) —
   three orthogonal axes, never one vague "does this look right" pass (see
   `REVIEW-CRITERIA.md`)
 - the Spec axis also judges the design's `## Decision` section

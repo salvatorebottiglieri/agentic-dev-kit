@@ -116,7 +116,7 @@ other access to it):
   names are the right domain states. Dependency: (h) consumes the model
   file, the lifecycle inventory and the gate's result; it runs after the
   design gate, not instead of it.
-- **ponytail axis** — the delete-list (`skill://ponytail-review`):
+- **ponytail axis** — the delete-list (`skill://ponytail-lean`):
   `delete` / `stdlib` / `native` / `yagni` / `shrink`, with a net
   lines-removable count. Every finding quotes the hunk verbatim →
   `advisory` (minimalism never blocks a correct feature alone). Scope:

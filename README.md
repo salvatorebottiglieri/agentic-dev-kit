@@ -35,7 +35,7 @@ design → implement-loop) and the review criteria family that gates a merge.
 
 This kit is a **layer on top of** [Matt Pocock's skills](https://github.com/mattpocock/skills)
 (MIT). The backbone flow it orchestrates — `grill-with-docs`, `to-spec`,
-`to-tickets`, `implement`, `tdd`, `code-review`, `ponytail-review`,
+`to-tickets`, `implement`, `tdd`, `code-review`, `ponytail-lean`,
 `domain-modeling`, `ask-matt` — lives there, not here. This repo adds the
 orchestration doc (`WORKFLOW.md`), the invariant gate (`audit.py`), and the custom
 skills that slot into the flow.
