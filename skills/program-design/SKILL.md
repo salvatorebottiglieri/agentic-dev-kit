@@ -164,7 +164,7 @@ before you publish:
 - **Choice**: <what the design does>
 - **Alternatives rejected**: <alternative> — <why rejected>; ...
 - **Consequences**: <agent behaviour, run cost, external contract impact>
-- **Owner sign-off**: <link to the comment where the owner approved it>
+- **Owner sign-off**: <date> — "<the owner's answer, verbatim>" (a chat answer counts; a tracker link is optional)
 ```
 
 One section per load-bearing choice; the heading starts with `## Decision`.

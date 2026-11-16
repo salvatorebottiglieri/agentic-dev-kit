@@ -26,7 +26,7 @@ A choice that changes agent behaviour, run cost, or an external contract (CLI
 argv, config keys, wire format, file layout) is a **load-bearing choice**. It
 must appear in the design — `docs/design/<feature>.md` and the appended
 `## Program Design` — as a `## Decision` section with the choice, the rejected
-alternatives, the consequences, and a link to the owner's sign-off comment. A
+alternatives, the consequences, and the owner's sign-off: the owner's own answer, quoted verbatim with its date (a chat answer counts; a link to a tracker comment is not required — D-043 rev. 2026-11-16). A
 design that makes such a choice without it is **incomplete**; the Spec axis
 raises it as `fatal`, quoting the design text as evidence. One section per
 choice; the heading starts with `## Decision`.

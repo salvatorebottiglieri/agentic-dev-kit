@@ -86,7 +86,7 @@ other access to it):
   agent behaviour, run cost, or an external contract (CLI argv, config keys,
   wire format, file layout) must appear in the design as a `## Decision`
   section with the choice, the rejected alternatives, the consequences, and a
-  link to the owner's sign-off comment. A design that makes such a choice
+  the owner's sign-off: the owner's own answer, quoted verbatim with its date (a chat answer counts; a link to a tracker comment is not required — D-043 rev. 2026-11-16). A design that makes such a choice
   without it is incomplete → `fatal`, quoting the design text that makes the
   choice as evidence. The brief names the design file and this criterion.
   Dependency: (f) consumes the design file and runs after the design gate,
