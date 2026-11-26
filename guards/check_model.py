@@ -118,6 +118,15 @@ def split_sections(text: str) -> dict[str, str]:
     return sections
 
 
+def contracted_sections(text: str) -> tuple[str, ...]:
+    """The lower-cased headings `check_model_text` requires of a model document: `REQUIRED_SECTIONS`,
+    plus `state machines` when its lifecycle inventory says an entity moves in time. Pure; an
+    inventory that cannot be read adds nothing (the check reports it)."""
+    inventory = split_sections(text).get("lifecycle inventory")
+    moving = _check_lifecycle(inventory)[0] if inventory is not None else 0
+    return REQUIRED_SECTIONS + (("state machines",) if moving else ())
+
+
 def mermaid_blocks(body: str) -> list[str]:
     return [match.group(1).strip() for match in MERMAID_RE.finditer(body)]
 

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="wf-token" content="">
+<title>workflow · sessions across repos</title>
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main>
+  <header class="wf-top">
+    <div class="wf-brand">workflow <small>· sessions across repos</small></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab on" id="tab-open" role="tab" aria-selected="true" type="button">Open <span id="count-open">…</span></button>
+      <button class="tab" id="tab-history" role="tab" aria-selected="false" type="button">History <span id="count-history">…</span></button>
+      <button class="tab" id="tab-workflow" role="tab" aria-selected="false" type="button">Workflow</button>
+      <button class="tab" id="tab-documents" role="tab" aria-selected="false" type="button">Documents</button>
+    </nav>
+    <input class="search" id="filter" type="search" placeholder="filter slug, repo, date…" aria-label="filter history by slug, repo or date" hidden>
+    <div class="fresh" id="fresh"></div>
+    <button class="theme-switch" id="theme-switch" type="button" aria-label="Dark theme" aria-pressed="false" title="Theme">◐</button>
+  </header>
+  <div class="banner bad" id="banner" role="alert" hidden></div>
+  <div class="banner bad" id="notice" role="alert" hidden></div>
+  <section class="docpane" id="docpane" hidden></section>
+  <div class="body" id="body">
+    <section id="view" aria-live="polite"><div class="loading" id="loading"><span class="spinner" aria-hidden="true"></span><span class="loading-text">Loading the features…</span></div></section>
+    <aside id="wfpanel" class="wfp" role="complementary" tabindex="-1" hidden></aside>
+  </div>
+</main>
+<footer id="timings" class="timings"></footer>
+<script src="/static/panel.js" defer></script>
+<script src="/static/app.js" defer></script>
+</body>
+</html>

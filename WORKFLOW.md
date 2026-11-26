@@ -2,9 +2,14 @@
 
 > Canonical reference for the agentic workflow. Every session follows this.
 > Edit these files to change session behavior — no system-prompt changes needed.
-> **This file is the index**: read it at session start, then read only the
-> file for the phase you are in. The files it points to are normative; the
-> tables below are pointers, not a summary that overrides them.
+> **This file is the index, and not where you start.** The entry point of every
+> feature is `python3 ~/agentic-dev-kit/wf.py next <feature>`, run from the
+> work repo: it derives the phase from the outputs in `docs/specs/<feature>.md`
+> and prints exactly what to read for that phase (the phase file, the skills —
+> including the ones wrapper skills call — and the transversal files). Run it
+> again to move on: it refuses until the current phase's output is valid. Never
+> read the phase files piecemeal instead. The files it points to are normative;
+> the tables below are pointers, not a summary that overrides them.
 
 Skills are read via `skill://<name>`, which means **read the file, don't
 invoke it**: the phase skills are user-invocation only
@@ -69,16 +74,19 @@ reads and obeys it.
 
 | Rule | Where | Enforced by |
 |---|---|---|
-| Phases in order; read the skill before the phase | this file | prompt |
-| Falsify the premises before publishing the spec | phase 1 | prompt |
-| Phase-2 decision always stated in the session | phase 2 | prompt |
-| Skipped phase annotated on the ticket (I3) | General rules | script (`audit.py` skip_annotations, warning) + prompt |
+| Restare a `prompt` richiede giustificazione in `RATIONALE.md` + trigger di escalation ("quando X accade, diventa `script`") — il livello è verificato, non promesso (D-024) | this file | script (`gen-flow.py --check` exits 1 if any rule lacks a level) |
+| Phases in order; read the skill before the phase | this file | script (`wf.py next`: derived phase + the phase's bundle) + prompt (the agent reads what it prints) |
+| Falsify the premises before publishing the spec | phase 1 | script (`wf.py` phase-1 check: every premise row has command, output, verdict) + prompt (quality of the falsification) |
+| Phase-2 decision always stated in the session | phase 2 | script (`wf.py` phase-0 check: a plan row for phase 2, run or skip with a reason) + prompt |
+| Skipped phase annotated on the ticket (I3) | General rules | script (`audit.py` skip_annotations, warning; `wf.py next`/`end` gate on the Delivery tickets before the merge: no spec marker and no `Skipped` note fails, naming `wf.py post-spec`, which posts the spec's sections once as a comment; `wf.py`: a skip counts only with a reason and the owner's quoted approval) + prompt |
+| The phase is derived from its outputs; the next phase's instructions are handed out only when every earlier phase is valid (D-053) | this file | script (`wf.py next`; `tests/test_harness.py`) |
+| A skip or a load-bearing Decision carries the owner's answer quoted with its date (D-053, D-043 rev.) | phase 0 + phase 5 | prompt (`wf.py` checks that a quoted answer is there, not that the owner gave it; trigger: an approval the owner did not give → TOTP-signed approvals) |
 | System Invariants each with a test that can fail | phase 3 | prompt (executed by the mutation prover) |
 | Program-design signatures are contract (I2) | phase 5 | prompt (judgment: Spec axis) |
 | The DesignDoc passes its checks (signatures, coherence, four exits, frontier) | phase 5 + pre-push | script (`guards/check_design.py`, pre-push hook) + prompt (Spec axis judges `handled_at`) |
 | Load-bearing Program Design choices carry a `## Decision` (choice, rejected alternatives, consequences, owner sign-off) — D-043 | phase 5 + phase 6 (Spec axis) | prompt (a silent load-bearing choice is `fatal` in the Spec axis; trigger: a load-bearing choice reaches a merge without `## Decision` → add `decisions[]` to the design JSON block and validate it with `guards/check_design.py`) |
 | External-system fixtures declare provenance (`captured` / `contract` / `synthetic`) in the design and a fixtures manifest — D-044 | phase 5 + phase 6 (Spec axis) | script (`guards/check_fixtures.py` validates the manifest and the listed files; pre-push hook when `tests/fixtures/PROVENANCE.md` exists) + prompt (Spec axis (g) judges which fixtures are external and whether the source is right) |
-| Feature model exists and is declared in the PR (`Model:`), with the as-built gate | phase 6 | script (`guards/check_model.py --gate`; `audit.py check_model_declared` on merged PRs, including that the declared file is in the PR diff) + prompt (the PR body and Spec axis (h)) |
+| Feature model exists and is declared in the PR (`Model:`), with the as-built gate | phase 6 | script (`guards/check_model.py --gate`; `audit.py check_model_declared` on merged PRs, including that the declared file is in the PR diff; `wf.py end` runs it on the Delivery PRs before the audit) + prompt (the PR body and Spec axis (h)) |
 | A semantic model change carries a link to the owner's approval (`## Model changes`) | phase 6 | script (`check_model.py` requires a URL per row) + prompt (Spec axis (h) judges validity and that it happened before the code) |
 | An entity whose lifecycle moves in time has a statechart | phase 6 (script) + phases 1, 3 (prompt) | script (`check_model.py` at as-built: inventory count, one `### <Entity>` per moving entity, enum-vs-state drift) + prompt (Spec axis (h) re-derives the trigger at design time) |
 | Aggregate model levels updated by altitude when they exist | phase 6 | prompt (Spec axis (h); levels are v2–v4) |
@@ -88,9 +96,9 @@ reads and obeys it.
 | Risk assessment in the PR body: `Risk: low/med/high`, `Blast radius:`, `Where to look:` (B-001) | phase 6 | prompt (implement-loop; deterministic path heuristic) |
 | Conditional blast-radius for `Risk: med/high`: search outside the diff and run the fact the safety depends on (B-014) | phase 6 | prompt (implement-loop; skill `why` B-017 still open) |
 | Review axes read-only; only the mutation prover applies mutants, in a scratch worktree; implementer/fixer briefs contain no mutation verb (B-007) | `REVIEW-CRITERIA.md` | prompt |
-| Mutation prover: the agent chooses the mutants, `guards/mutation_prover.py` executes them in clean worktrees, control first (B-026/D-046) | phase 6 | script (`guards/mutation_prover.py`; JSONL matrix `pinned`/`blind-test`/`no-test`/`error`; control green = `inconclusive`, exit 1) + prompt (the agent chooses targets and patches) |
+| Mutation prover: the agent chooses the mutants, `guards/mutation_prover.py` executes them in clean worktrees, control first (B-026/D-046) | phase 6 | script (`guards/mutation_prover.py --name`, the matrix in the report store: `pinned`/`blind-test`/`no-test`/`error`; control green = `inconclusive`, exit 1) + prompt (the agent chooses targets and patches) |
 | Evidence quote matches the diff verbatim (criterion 4) | `REVIEW-CRITERIA.md` | script (`audit.py check_reviewer_evidence_verbatim`, every code-claim quote matched against `commit`'s diff) + prompt (`weights.Spec` axis judgment on content) |
-| Every brief item answered, counted by the orchestrator (criterion 7) | `REVIEW-CRITERIA.md` | script (`audit.py check_brief_coverage`, every brief item has a row in `reports/*.jsonl`) + prompt (reviewer emits a row per item) |
+| Every brief item answered, counted by the orchestrator (criterion 7) | `REVIEW-CRITERIA.md` | script (`audit.py check_brief_coverage`, every brief item registered with `wf.py report brief` has a row in the report store) + prompt (reviewer emits a row per item) |
 | Every reviewer report is scoped to the audited repo and names its actor (B-004/D-031) | `REVIEW-CRITERIA.md` | script (`audit.py check_report_actor`, every scoped report row has an `actor`; `gather_reviewer_reports` filters by `repo`) |
 | Zero actionable findings to exit the fix loop (I6) | phase 6 | script (`audit.py check_i6_zero_actionable`, no `status=open` + `severity=fatal` + `verdict=actionable` row) + prompt (Spec axis judgment on which findings are actionable) |
 | Falsify the premises of the design before publishing (B-025/2) | phase 1 | script (`audit.py check_premises_falsified`, every design premise has verdict `confirmed`/`falsified` + evidence) + prompt (the desiger lists premises) |
@@ -118,7 +126,9 @@ reads and obeys it.
 - Unsure which skill to use? Read `skill://ask-matt` (router).
 - Skipped phases are never silent: the decision is stated in the session
   ("Phase N skipped — <reason>") and annotated on the ticket/spec:
-  "Skipped — <reason>".
+  "Skipped — <reason>". The skip lives in the spec's `## Phase plan`
+  (`docs/specs/<feature>.md`), with a reason and the owner's answer quoted with
+  its date (`phases/0-start.md`); `wf.py next` does not count a skip without them.
 - Custom skills (implement-loop, product-review, program-design,
   system-architecture, modular-monolith) are authored in the canonical
   `kit/skills/` and installed by the public `agentic-dev-kit` repo's
@@ -146,6 +156,10 @@ reads and obeys it.
   (4) **clean up worktrees** per `SESSION-ISOLATION.md` § "Cleanup at session end":
   the session's own always, others only on evidence, anything dirty or
   unreachable archived and reported instead of dropped.
+  `python3 ~/agentic-dev-kit/wf.py end <feature>` checks the handoff, for the GitHub PRs of the
+  spec's Delivery rows the `Model:` line of each merged PR body (D-057), and that every Delivery
+  ticket carries a spec section or a `Skipped` note (I3, D-060); a ticket without one fails and the
+  fix is `python3 ~/agentic-dev-kit/wf.py post-spec <feature>`.
   The audit only sees tracker artifacts (issues, PRs, handoffs): work done
   outside the pipeline — local design docs, direct commits, exploration — is
   invisible to it; the handoff is what makes it visible and auditable.
@@ -166,6 +180,19 @@ at the end of every session** (see General rules) and pre-merge in any repo:
 ```
 python ~/agentic-dev-kit/audit.py --repo <owner/repo> [--since YYYY-MM-DD]
 ```
+
+The audit reads GitHub in a pool of 8 and retries a failed read three times. A
+read that still fails is listed after the violations under `M item(s) could not
+be read (not checked; this is not a pass)`: the audit then exits 1 and prints
+no `ok`, even with no violation. Re-run it; never read that exit as green.
+
+The `--since` window (30 days by default) bounds the reviewer rows too, by whole
+feature: a feature is dated by its most recent reviewer row or brief item, and one
+dated before `--since` is left out with all its rows and its brief, so its commits
+are not read from GitHub. The audit says what it left out, after the violations and
+before the unread list: `N reviewer rows older than the window were not checked`,
+then one line per feature. The note is information: it adds no violation and does not
+change the exit code. `--since 2000-01-01` checks everything.
 
 Every session ends with a handoff in `~/agentic-dev-kit/handoffs/`
 (`handoff-<feature>-<YYYYMMDD>.md`), git-versioned, listing: the repo it

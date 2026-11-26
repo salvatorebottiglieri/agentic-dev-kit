@@ -15,7 +15,7 @@ needed because a document can be internally coherent and false about the
 world: no check on its form sees that (B-023, "case B"), this one does — for
 the part that concerns the signatures.
 
-    python3 guards/check_design.py <design.md|design.json> [repo-root] [--quiet] [--gate]
+    python3 guards/check_design.py <design.md|design.json> [repo-root] [--quiet] [--gate] [--allow-removing]
 
 `--gate` runs the subset that must exit **0** at pre-push and in CI —
 signatures + coherence + exits + frontier — and **not** the state: the state's
@@ -29,7 +29,18 @@ Verdicts, per function declared in the document:
     shortened      the document lists a subset: it omits only parameters with a
                    default, or parameters the framework passes (click commands)
     proposed       the document adds parameters the code does not have (proposed change)
+    removing       the code still has a parameter the entry's `removes` declares removed:
+                   accepted in full mode (the code is not written yet), [exit 1 at --gate]
     incompatible   the document omits a REQUIRED parameter of the code        [exit 1]
+
+A signature entry may declare the parameters the design removes (issue #4):
+`"removes": {"func": ["p"], "Class.method": ["q"]}`. A removed parameter is not
+`missing`; while the code still has it — required or with a default — the
+verdict is `removing`. A key that names no def of the entry, or a removed
+parameter the declared signature still carries, is a contradiction.
+`--allow-removing` (with `--gate`) accepts `removing`: the phase harness uses it
+to judge the design itself, which is valid before and after the removal; the
+pre-push gate runs without it, so a removal the code did not carry out fails.
 
 Exit 1 on incompatible signatures is deliberate: at the pre-push gate the same
 script verifies that the implemented signatures respect the design contract
@@ -139,10 +150,35 @@ def declared_defs(doc: dict) -> list[dict]:
             continue
         where = entry.get("module") or ""
         path = re.search(r"[\w./-]+\.py", where)
+        removes = entry.get("removes") or {}
         for cls, name, raw in _defs_with_class(entry.get("code") or ""):
             out.append({"name": name, "args": raw, "cls": cls,
                         "module": path.group(0) if path else None,
-                        "in": where})
+                        "in": where,
+                        "removes": list(removes.get(f"{cls}.{name}" if cls else name, []))})
+    return out
+
+
+def check_removes(doc: dict) -> list[str]:
+    """`removes` agrees with the signatures of its own entry (issue #4): every key is
+    `func` or `Class.method` of a def the entry declares — a misspelt key would leave the
+    removal undeclared, and an optional parameter unchecked — and no removed parameter is
+    still in the declared signature."""
+    out: list[str] = []
+    for entry in doc.get("signatures", []):
+        removes = entry.get("removes") or {}
+        if not removes:
+            continue
+        defs = {(f"{c}.{n}" if c else n): raw for c, n, raw in _defs_with_class(entry.get("code") or "")}
+        where = entry.get("module") or "?"
+        for key, params in removes.items():
+            if key not in defs:
+                out.append(f"{where}: `removes` names «{key}», which no def of the entry declares")
+                continue
+            kept = [p for p in params if p in tokens(defs[key])]
+            if kept:
+                out.append(f"{where}: {key} removes {', '.join(kept)} but its declared signature "
+                           f"still carries it — the document contradicts itself")
     return out
 
 
@@ -204,9 +240,30 @@ def _split_top_level(raw: str) -> list[str]:
     return parts
 
 
+def _strip_comments(raw: str) -> str:
+    """Drop the `#` comment of each line, keeping the newline: the comment belongs to
+    the LINE, not to the parameter that follows it. Quoted `#` is not a comment."""
+    out, quote, comment = [], "", False
+    for ch in raw:
+        if comment:
+            if ch == "\n":
+                comment = False
+                out.append(ch)
+            continue
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#":
+            comment = True
+            continue
+        out.append(ch)
+    return "".join(out)
+
+
 def tokens(raw: str) -> list[str]:
     names = []
-    for part in _split_top_level(raw):
+    for part in _split_top_level(_strip_comments(raw)):
         t = part.split(":")[0].split("=")[0].strip()
         if not t or t in ("*", "/") or t.startswith("*") or t in ("self", "cls"):
             continue
@@ -216,10 +273,14 @@ def tokens(raw: str) -> list[str]:
 
 def classify(decl: dict, real: dict) -> tuple[str, str]:
     given = set(tokens(decl["args"]))
+    removed = set(decl.get("removes") or [])
     known = set(real["required"]) | set(real["optional"])
-    missing = [p for p in real["required"] if p not in given]
+    missing = [p for p in real["required"] if p not in given and p not in removed]
     if missing and not real["framework"]:
         return "incompatible", "missing " + ", ".join(missing)
+    still = [p for p in real["required"] + real["optional"] if p in removed]
+    if still:
+        return "removing", "the code still has " + ", ".join(still)
     if missing:
         return "shortened", "the framework passes " + ", ".join(missing)
     extra = [p for p in given if p not in known]
@@ -389,6 +450,7 @@ def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     quiet = "--quiet" in argv
     gate = "--gate" in argv
+    allow_removing = "--allow-removing" in argv
     if not args:
         print(__doc__)
         return 2
@@ -417,7 +479,7 @@ def main(argv: list[str]) -> int:
             note = (note + " · " if note else "") + f"in the code it is {real_fn['module']}"
         rows.append((decl["name"], f"{real_fn['module']}:{real_fn['line']}", verdict, note))
 
-    order = {"incompatible": 0, "proposed": 1, "shortened": 2, "compatible": 3, "new": 4}
+    order = {"incompatible": 0, "removing": 1, "proposed": 2, "shortened": 3, "compatible": 4, "new": 5}
     rows.sort(key=lambda r: order.get(r[2], 9))
     width = max((len(r[0]) for r in rows), default=10)
     for name, where, verdict, note in rows:
@@ -427,14 +489,17 @@ def main(argv: list[str]) -> int:
         if note:
             print(f"  {'':<{width}}  {'':<14} {note}")
 
-    bad = [r for r in rows if r[2] == "incompatible"]
+    # `removing` is the design's order still to carry out: legal at the end of phase 5,
+    # a failure at the gate, where the implementation must have removed the parameter.
+    bad = [r for r in rows
+           if r[2] == "incompatible" or (gate and not allow_removing and r[2] == "removing")]
     # The design's state has a window: it is true only while the code does not
     # exist. At the gate (pre-push, after implementation) it would be stale by
     # construction, and a gate that always fails is one people learn to bypass.
     # So `--gate` does not check it; the state runs at the end of phase 5, when
     # its premise holds.
     state_problems = [] if gate else check_states(doc, real)
-    incoherent = check_coherence(doc)
+    incoherent = sorted(set(check_coherence(doc) + check_removes(doc)))
     exit_problems = check_exits(doc)
     frontier_problems = check_frontier(doc, root)
     counts = {v: sum(1 for r in rows if r[2] == v) for v in order}

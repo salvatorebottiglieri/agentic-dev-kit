@@ -4,7 +4,7 @@
 Pure check functions (input data -> violations) + a CLI that gathers data
 from the configured tracker via ``gh``. Run in any project:
 
-    python ~/agentic-dev-kit/audit.py --repo owner/repo [--since YYYY-MM-DD]
+    python ~/agentic-dev-kit/audit.py --repo owner/repo [--since YYYY-MM-DD] [--store PATH]
 
 Each check maps to an invariant in INVARIANTS.md; every check must be able
 to fail (see tests/test_audit.py — mutation tests feed deliberately
@@ -13,19 +13,28 @@ violating inputs and assert the violation is detected).
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
+import os
 import re
+import sqlite3
 import subprocess
 import sys
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import NamedTuple
 
 WORKFLOW_DIR = Path(__file__).resolve().parent
 HANDOFFS_DIR = WORKFLOW_DIR / "handoffs"
-REPORTS_DIR = WORKFLOW_DIR / "reports"
 ISSUE_REF_RE = re.compile(r"#\d+")
 MODEL_RULE_SINCE = "2026-11-10"
 MODEL_DECL_RE = re.compile(r"^Model:\s*(.+)$", re.M | re.I)
+GH_WORKERS = 8
+GH_ATTEMPTS = 3
+GH_BACKOFF = 0.5
 
 
 # ── Pure checks ──────────────────────────────────────────────────────
@@ -115,6 +124,8 @@ def check_ci_before_merge(prs: list[dict]) -> list[str]:
         if not pr.get("merged"):
             continue
         rollup = pr.get("statusCheckRollup") or []
+        if isinstance(rollup, Unread):
+            continue  # unreadable — main lists it as unread, never as a pass
         if not rollup:
             continue  # no check data — cannot verify, not a violation
         for check in rollup:
@@ -128,37 +139,37 @@ def check_ci_before_merge(prs: list[dict]) -> list[str]:
     return violations
 
 
+#: Marker set = the actual spec/ticket formats used across the workflow: spec issues
+#: (Problem Statement/Solution), tickets (What to build/Acceptance), architecture/invariants
+#: sections, program design. The one list the I3 audit and any caller's gate read.
+SPEC_MARKERS: tuple[str, ...] = (
+    "## Problem Statement",
+    "## Solution",
+    "## What to build",
+    "## Acceptance",
+    "## System Architecture",
+    "## Invariants",
+    "## Program Design",
+)
+
+
+def issue_has_spec(issue: dict) -> bool:
+    """I3 — the issue carries a spec marker or a skip note, in its body or in a comment.
+    The clause (INVARIANTS.md § I3) accepts the annotation in the body *or* in a comment,
+    so the search text is body plus comment bodies."""
+    comments = issue.get("comments") or []
+    text = "\n".join([issue.get("body") or "", *((c.get("body") or "") for c in comments)])
+    return "skipped" in text.lower() or any(m in text for m in SPEC_MARKERS)
+
+
 def check_skip_annotations(issues: list[dict]) -> list[str]:
     """I3 — closed non-trivial issues carry a spec section or a skip note."""
-    # Marker set = the actual spec/ticket formats used across the workflow:
-    # spec issues (Problem Statement/Solution), tickets (What to build/
-    # Acceptance), architecture/invariants sections, program design.
-    SPEC_MARKERS = (
-        "## Problem Statement",
-        "## Solution",
-        "## What to build",
-        "## Acceptance",
-        "## System Architecture",
-        "## Invariants",
-        "## Program Design",
-    )
-    violations = []
-    for issue in issues:
-        if issue.get("state") != "CLOSED":
-            continue
-        # The clause (INVARIANTS.md § I3) accepts the annotation in the body
-        # *or* in a comment, so the search text is body plus comment bodies.
-        comments = issue.get("comments") or []
-        text = "\n".join(
-            [issue.get("body") or "", *((c.get("body") or "") for c in comments)]
-        )
-        if "skipped" in text.lower() or any(m in text for m in SPEC_MARKERS):
-            continue
-        violations.append(
-            f"[I3] issue #{issue['number']} closed without a spec section "
-            "or 'Skipped — reason' annotation (review: is it trivial?)"
-        )
-    return violations
+    return [
+        f"[I3] issue #{issue['number']} closed without a spec section "
+        "or 'Skipped — reason' annotation (review: is it trivial?)"
+        for issue in issues
+        if issue.get("state") == "CLOSED" and not issue_has_spec(issue)
+    ]
 
 
 def _handoff_date(name: str) -> datetime | None:
@@ -598,7 +609,7 @@ def check_phase2_decision_stated(handoffs: list[dict]) -> list[str]:
 
 
 def check_reviewer_evidence_verbatim(
-    reports: list[dict], pr_diffs: dict[str, str]
+    reports: list[dict], pr_diffs: dict[str, str | Unread]
 ) -> list[str]:
     """B-025 voce 8 — every ``quote`` for a code claim appears verbatim in
     the diff of its ``commit``. A quote that does not match is a
@@ -629,6 +640,8 @@ def check_reviewer_evidence_verbatim(
                 f"not in pr_diffs (cannot verify)"
             )
             continue
+        if isinstance(diff, Unread):
+            continue  # not judged, not found wrong — main lists it as unread
         if quote not in diff:
             violations.append(
                 f"[B-025/8] finding item_id={item} criterion={criterion} "
@@ -637,21 +650,33 @@ def check_reviewer_evidence_verbatim(
     return violations
 
 
+def _is_pass_like(verdict: object) -> bool:
+    """#13: REVIEW-CRITERIA verdict vocabulary — ``pass``, ``pinned``, ``n/a ...``."""
+    v = str(verdict or "")
+    return v in ("pass", "pinned") or v.startswith("n/a")
+
+
 def check_i6_zero_actionable(reports: list[dict]) -> list[str]:
     """B-025 voce 10 — the implement-loop ends only with zero actionable
-    findings (I6). A ``status=open`` finding with ``severity=fatal`` and
-    ``verdict=actionable`` is an unresolved blocker: the fix loop must
-    continue, not exit. Status ``resolved`` closes the finding (the
-    next commit / re-review closes it). ``advisory`` findings are not
-    blockers and never trigger I6 — they ride along in the handoff.
+    findings (I6). An open (default) ``severity=fatal`` row whose verdict is
+    not pass-like (``pass``, ``pinned``, ``n/a ...``) is an unresolved
+    blocker: the fix loop must continue. It is closed by another row of the
+    same ``_feature``, ``item_id`` and ``criterion`` with status ``resolved``
+    or ``fixed``. ``advisory`` rows never block.
     """
+    def close_key(r: dict) -> tuple:
+        return (r.get("_feature"), r.get("item_id"), r.get("criterion"))
+
+    closed = {close_key(r) for r in reports if r.get("status") in ("resolved", "fixed")}
     violations = []
     for r in reports:
         if (r.get("status", "open") == "open"
                 and r.get("severity") == "fatal"
-                and r.get("verdict") == "actionable"):
+                and not _is_pass_like(r.get("verdict"))
+                and close_key(r) not in closed):
             violations.append(
-                f"[I6/B-025/10] actionable finding item_id={r.get('item_id','?')} "
+                f"[I6/B-025/10] {r.get('verdict', '?')} finding "
+                f"item_id={r.get('item_id','?')} "
                 f"criterion={r.get('criterion','?')} reviewer={r.get('reviewer','?')} "
                 f"is still open (fix loop must continue)"
             )
@@ -697,111 +722,155 @@ def check_report_actor(reports: list[dict]) -> list[str]:
     return violations
 
 
-def _feature_axis(path: Path) -> tuple[str, str]:
-    """``agentic-5061-s44-review`` → (``agentic-5061-s44``, ``review``)."""
-    if "-" in path.stem:
-        return tuple(path.stem.rsplit("-", 1))  # type: ignore[return-value]
-    return path.stem, ""
+def _feature_axis(
+    path: Path, features: frozenset[str] = frozenset()
+) -> tuple[str, str]:
+    """``phase-harness-spec-r2`` → (``phase-harness``, ``spec-r2``).
 
-
-def _report_paths(reports_dir: Path, handoffs_dir: Path) -> list[Path]:
-    paths = sorted(reports_dir.glob("*.jsonl")) if reports_dir.is_dir() else []
-    if handoffs_dir.is_dir():
-        paths += sorted(handoffs_dir.glob("*-reports/*.jsonl"))
-    return paths
-
-
-def gather_reviewer_reports(
-    repo: str,
-    reports_dir: Path | None = None,
-    handoffs_dir: Path | None = None,
-) -> list[dict]:
-    """Read the JSONL reviewer reports scoped to *repo* (B-004).
-
-    Old reports have no ``repo`` field and are skipped: the audit cannot know
-    which project they belong to, and judging them against the audited repo
-    would be the same false-positive class as I9. New reports carry ``repo``
-    (REVIEW-CRITERIA.md schema) and are filtered here. Rows are deduplicated
-    because the same report may exist in ``reports/`` and in an archived
-    ``handoffs/*-reports/`` directory.
+    *features* are the feature names declared by brief manifests: the longest
+    one that the stem equals or prefixes (``feature + "-"``) wins and the rest
+    is the axis (it may contain dashes). Without a match, split at the last
+    dash (``example-5061-s44-review`` → ``example-5061-s44``, ``review``).
     """
-    reports_dir = Path(reports_dir) if reports_dir is not None else REPORTS_DIR
-    handoffs_dir = Path(handoffs_dir) if handoffs_dir is not None else HANDOFFS_DIR
+    stem = path.stem
+    feature = max(
+        (f for f in features if stem == f or stem.startswith(f + "-")),
+        key=len,
+        default=None,
+    )
+    if feature is not None:
+        return feature, stem[len(feature) + 1:]
+    if "-" in stem:
+        return tuple(stem.rsplit("-", 1))  # type: ignore[return-value]
+    return stem, ""
+
+
+def _store_module():
+    """The sibling report_store.py of this install, loaded by path."""
+    found = importlib.util.spec_from_file_location("audit_report_store", WORKFLOW_DIR / "report_store.py")
+    module = importlib.util.module_from_spec(found)
+    found.loader.exec_module(module)
+    return module
+
+
+def _read_store(store: Path | None, read, default):
+    """``read(module, conn)`` on the store at *store*; *default* when there is no store.
+
+    A path that is not a file is no store (``report_store.open_existing``): reading never creates one.
+    With no path the module is not even loaded: audit.py travels without report_store.py."""
+    if store is None:
+        return default
+    module = _store_module()
+    try:
+        conn = module.open_existing(store)
+        if conn is None:
+            return default
+        try:
+            return read(module, conn)
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        raise RuntimeError(f"report store {store}: {exc}") from exc
+
+
+def _stored_axis(feature: str, report: str) -> str:
+    """The report name minus ``<feature>-``: what ``_feature_axis`` gives the file of that name."""
+    if report == feature:
+        return ""
+    return report.removeprefix(feature + "-")
+
+
+def gather_reviewer_reports(repo: str, store: Path | None = None) -> list[dict]:
+    """Read the reviewer reports of *repo* from the report store (B-004).
+
+    The store is the only source (#70): no store, or a path that is not a file, gives no
+    rows and is never created. A stored row takes its ``_feature`` from its ``feature``
+    column. Rows of other repos, and old rows with no ``repo``, are not returned: the
+    audit cannot know which project they belong to, and judging them against the audited
+    repo would be the same false-positive class as I9. A row stored twice (one report
+    imported from two folders, or under two report names) counts once.
+    """
     rows: list[dict] = []
     seen: set[str] = set()
-    for path in _report_paths(reports_dir, handoffs_dir):
-        feature, axis = _feature_axis(path)
-        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError(f"report {path}:{lineno}: invalid JSON: {exc}") from exc
-            if not isinstance(row, dict):
-                raise RuntimeError(f"report {path}:{lineno}: expected a JSON object")
-            if row.get("repo") != repo:
-                continue
-            row = dict(row)
-            row["_feature"] = feature
-            row["_axis"] = axis
-            key = json.dumps(row, sort_keys=True, default=str)
-            if key in seen:
-                continue
+    for row, feature, report in _read_store(store, lambda m, c: m.review_records(c, repo), []):
+        row = dict(row)
+        row["_feature"] = feature
+        row["_axis"] = _stored_axis(feature, report)
+        key = json.dumps(row, sort_keys=True, default=str)
+        if key not in seen:
             seen.add(key)
             rows.append(row)
     return rows
 
 
-def gather_brief_items(
-    repo: str,
-    reports_dir: Path | None = None,
-    handoffs_dir: Path | None = None,
-) -> dict[str, list[str]]:
-    """Read ``reports/<feature>-brief.json`` manifests scoped to *repo*.
+def gather_brief_items(repo: str, store: Path | None = None) -> dict[str, list[str]]:
+    """The briefs of *repo* in the report store: feature -> its numbered items.
 
-    The orchestrator writes the numbered brief before spawning the reviewers;
-    ``check_brief_coverage`` needs it to know what "every item" means. The
-    file carries ``repo``, ``feature`` and ``items`` (a list of strings).
+    The orchestrator stores the numbered brief (``wf.py report brief``) before spawning the
+    reviewers; ``check_brief_coverage`` needs it to know what "every item" means. No store
+    gives no briefs (and none is created).
     """
-    reports_dir = Path(reports_dir) if reports_dir is not None else REPORTS_DIR
-    handoffs_dir = Path(handoffs_dir) if handoffs_dir is not None else HANDOFFS_DIR
-    paths = sorted(reports_dir.glob("*-brief.json")) if reports_dir.is_dir() else []
-    if handoffs_dir.is_dir():
-        paths += sorted(handoffs_dir.glob("*-reports/*-brief.json"))
-    briefs: dict[str, list[str]] = {}
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"brief {path}: invalid JSON: {exc}") from exc
-        if not isinstance(data, dict) or data.get("repo") != repo:
-            continue
-        feature = data.get("feature") or path.stem.removesuffix("-brief")
-        items = data.get("items")
-        if not isinstance(items, list) or not all(isinstance(i, str) for i in items):
-            raise RuntimeError(f"brief {path}: items must be a list of strings")
-        briefs[str(feature)] = items
-    return briefs
+    return _read_store(store, lambda m, c: m.brief_items(c, repo), {})
 
 
-def gather_pr_diffs(repo: str, reports: list[dict]) -> dict[str, str]:
+def gather_feature_dates(repo: str, store: Path | None = None) -> dict[str, str]:
+    """feature -> the ``recorded_at`` of its most recent reviewer row or brief item (#102).
+
+    No store gives no dates (and none is created)."""
+    return _read_store(store, lambda m, c: m.feature_dates(c, repo), {})
+
+
+def apply_window(reports: list[dict], briefs: dict[str, list[str]], dates: dict[str, str],
+                 since: str) -> tuple[list[dict], dict[str, list[str]], dict[str, int]]:
+    """Keep the features dated on or after *since*, whole; count the rows of the others (#102).
+
+    A feature is inside when the first ten characters of its date are >= *since*, or when it has
+    no date (it is never dropped silently). Returns the rows and briefs of the features inside, in
+    their order, and ``left_out``: feature -> its number of rows left out (0 for a brief-only one).
+    """
+    def inside(feature: str) -> bool:
+        return feature not in dates or dates[feature][:10] >= since
+
+    left_out: dict[str, int] = {}
+    for feature in [r.get("_feature") for r in reports] + list(briefs):
+        if not inside(feature):
+            left_out.setdefault(feature, 0)
+    for r in reports:
+        if r.get("_feature") in left_out:
+            left_out[r["_feature"]] += 1
+    return ([r for r in reports if inside(r.get("_feature"))],
+            {f: items for f, items in briefs.items() if inside(f)}, left_out)
+
+
+def window_note(left_out: dict[str, int]) -> list[str]:
+    """The lines of the informative note about the features left out of the window (#102)."""
+    if not left_out:
+        return []
+    return ([f"{sum(left_out.values())} reviewer rows older than the window were not checked"]
+            + [f"  - {feature}: {rows} row(s)" for feature, rows in sorted(left_out.items())])
+
+
+def gather_pr_diffs(repo: str, reports: list[dict]) -> dict[str, str | Unread]:
     """Fetch the patch of every commit cited by a report (B-004).
 
     ``check_reviewer_evidence_verbatim`` needs the diff of the report's
     ``commit``. The commit API is enough: the quote is matched against the
     patch, not against the PR body. Commits with no textual patch (binary or
     merge) produce an empty diff and the check reports the quote as missing.
+    A commit that cannot be read is kept as an ``Unread``; nothing raises.
     """
     commits = sorted({r["commit"] for r in reports if r.get("commit")})
-    diffs: dict[str, str] = {}
-    for sha in commits:
-        data = _gh(["api", f"repos/{repo}/commits/{sha}"])
-        if not isinstance(data, dict):
-            raise RuntimeError(f"commit {sha}: unexpected API response")
-        parts = [f.get("patch", "").rstrip("\n") for f in data.get("files", [])
-                 if f.get("patch")]
-        diffs[sha] = "\n".join(parts)
+    calls = [["api", f"repos/{repo}/commits/{sha}"] for sha in commits]
+    diffs: dict[str, str | Unread] = {}
+    for sha, call, data in zip(commits, calls, _gh_many(calls)):
+        if isinstance(data, Unread):
+            diffs[sha] = data
+        elif not isinstance(data, dict):
+            diffs[sha] = Unread("gh " + " ".join(call), "unexpected API response")
+        else:
+            parts = [f.get("patch", "").rstrip("\n") for f in data.get("files", [])
+                     if f.get("patch")]
+            diffs[sha] = "\n".join(parts)
     return diffs
 
 
@@ -838,6 +907,33 @@ def _gh(args: list[str]) -> dict:
     return json.loads(proc.stdout)
 
 
+class Unread(NamedTuple):
+    call: str
+    reason: str
+
+
+def _gh_many(calls: list[list[str]], sleep: Callable[[float], None] = time.sleep) -> list[dict | Unread]:
+    """Read independent ``gh`` calls in a pool, in the order of *calls*.
+
+    Each call is retried up to ``GH_ATTEMPTS`` times with a doubling backoff;
+    one that keeps failing (any exception) comes back as an ``Unread``.
+    """
+    def read(args: list[str]) -> dict | Unread:
+        n = 0
+        while True:
+            n += 1
+            try:
+                return _gh(args)
+            except Exception as exc:  # noqa: BLE001 — nothing may leave the pool
+                if n >= GH_ATTEMPTS:
+                    return Unread("gh " + " ".join(args),
+                                  f"{type(exc).__name__}: {exc}")
+                sleep(GH_BACKOFF * 2 ** (n - 1))
+
+    with ThreadPoolExecutor(max_workers=GH_WORKERS) as pool:
+        return list(pool.map(read, calls))
+
+
 def gather_prs(repo: str, since: str) -> list[dict]:
     """Merged PRs since *since*, with body + CI rollup."""
     prs = _gh([
@@ -845,19 +941,20 @@ def gather_prs(repo: str, since: str) -> list[dict]:
         "--search", f"merged:>={since}",
         "--json", "number,mergedAt,body,headRefOid,files",
     ])
-    for pr in prs:
-        try:
-            detail = _gh([
-                "pr", "view", str(pr["number"]), "--repo", repo,
-                "--json", "state,statusCheckRollup",
-            ])
-        except RuntimeError:
+    views = _gh_many([
+        ["pr", "view", str(pr["number"]), "--repo", repo,
+         "--json", "state,statusCheckRollup"]
+        for pr in prs
+    ])
+    for pr, detail in zip(prs, views):
+        if isinstance(detail, Unread):
             # The rollup is unreadable (token without check-run access): the
             # PRs come from `--state merged`, so the state is known, and the
             # same jobs are readable on the Actions runs channel.
             pr["merged"] = True
-            pr["statusCheckRollup"] = _rollup_from_actions(
-                repo, pr.get("headRefOid")
+            sha = pr.get("headRefOid")
+            pr["statusCheckRollup"] = (
+                _rollup_from_actions(repo, sha) if sha else detail
             )
             continue
         pr["merged"] = detail["state"] == "MERGED"
@@ -865,7 +962,7 @@ def gather_prs(repo: str, since: str) -> list[dict]:
     return prs
 
 
-def _rollup_from_actions(repo: str, sha: str | None) -> list[dict]:
+def _rollup_from_actions(repo: str, sha: str) -> list[dict] | Unread:
     """Fallback for the PR check rollup, read from the Actions runs.
 
     `--json statusCheckRollup` needs a token allowed to read check runs; the
@@ -876,18 +973,15 @@ def _rollup_from_actions(repo: str, sha: str | None) -> list[dict]:
     Only `pull_request` runs are the PR gate (a `push` run on the default
     branch is not), only completed runs have a conclusion, and the newest run
     wins — `gh run list` returns newest first. An unreadable channel returns
-    [] ("cannot verify"), which ``check_ci_before_merge`` treats as not a
-    violation; the rollup stays the primary channel.
+    an ``Unread`` (never a pass: ``main`` lists it); the rollup stays the
+    primary channel.
     """
-    if not sha:
-        return []
-    try:
-        runs = _gh([
-            "run", "list", "--repo", repo, "--commit", sha, "--limit", "50",
-            "--json", "name,status,conclusion,event",
-        ])
-    except RuntimeError:
-        return []
+    [runs] = _gh_many([[
+        "run", "list", "--repo", repo, "--commit", sha, "--limit", "50",
+        "--json", "name,status,conclusion,event",
+    ]])
+    if isinstance(runs, Unread):
+        return runs
     rollup: list[dict] = []
     seen: set[str] = set()
     for run in runs:
@@ -1004,11 +1098,15 @@ def gather_known_refs(repo: str) -> set[int]:
 def main() -> int:
     args = sys.argv[1:]
     repo = None
+    store = None
     since = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     i = 0
     while i < len(args):
         if args[i] == "--repo" and i + 1 < len(args):
             repo = args[i + 1]
+            i += 2
+        elif args[i] == "--store" and i + 1 < len(args):
+            store = Path(args[i + 1])
             i += 2
         elif args[i] == "--since" and i + 1 < len(args):
             since = args[i + 1]
@@ -1016,10 +1114,14 @@ def main() -> int:
         else:
             i += 1
     if not repo:
-        print("usage: audit.py --repo owner/repo [--since YYYY-MM-DD]", file=sys.stderr)
+        print("usage: audit.py --repo owner/repo [--since YYYY-MM-DD] [--store PATH]", file=sys.stderr)
         return 2
 
+    if store is None:
+        store = _store_module().default_store_path(os.environ, Path.home())
     violations: list[str] = []
+    if not store.is_file():
+        violations.append(f"[B-004] no report store at {store}")
     try:
         prs = gather_prs(repo, since)
         issues = gather_issues(repo, since)
@@ -1049,8 +1151,10 @@ def main() -> int:
     violations += check_handoffs_quote_commands(recent_handoffs)
 
     try:
-        reports = gather_reviewer_reports(repo)
-        briefs = gather_brief_items(repo)
+        reports = gather_reviewer_reports(repo, store=store)
+        briefs = gather_brief_items(repo, store=store)
+        dates = gather_feature_dates(repo, store=store)
+        reports, briefs, left_out = apply_window(reports, briefs, dates, since)
         pr_diffs = gather_pr_diffs(repo, reports)
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -1064,13 +1168,24 @@ def main() -> int:
     for feature in sorted({r.get("_feature") for r in reports} - set(briefs)):
         violations.append(
             f"[B-004] feature {feature} has reports but no brief manifest "
-            "(reports/<feature>-brief.json)"
+            "(wf.py report brief)"
         )
 
+    unread = [pr["statusCheckRollup"] for pr in prs
+              if isinstance(pr.get("statusCheckRollup"), Unread)]
+    unread += [d for d in pr_diffs.values() if isinstance(d, Unread)]
     if violations:
         print(f"{len(violations)} violation(s):")
         for v in violations:
             print(f"  - {v}")
+    for line in window_note(left_out):
+        print(line)
+    if unread:
+        print(f"{len(unread)} item(s) could not be read "
+              "(not checked; this is not a pass):")
+        for u in unread:
+            print(f"  - {u.call}: {u.reason}")
+    if violations or unread:
         return 1
     print("ok — all workflow invariants hold")
     return 0

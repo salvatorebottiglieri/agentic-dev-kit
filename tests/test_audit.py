@@ -8,7 +8,11 @@ compliant input passes.
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -200,6 +204,45 @@ def test_skip_annotations_accepts_skip_note_in_comment():
     assert check_skip_annotations(issues) == []
 
 
+def test_audit_marker_list_is_one_module_constant_and_check_skip_annotations_uses_it(monkeypatch):
+    """A ticket carrying only an entry of `audit.SPEC_MARKERS` is not flagged; the list is the
+    one `check_skip_annotations` reads (a list edit changes the audit)."""
+    assert "## Solution" in audit.SPEC_MARKERS and "## Program Design" in audit.SPEC_MARKERS
+    monkeypatch.setattr(audit, "SPEC_MARKERS", ("## Only This",))
+    kept = [{"number": 20, "state": "CLOSED", "body": "## Only This"}]
+    dropped = [{"number": 21, "state": "CLOSED", "body": "## Solution"}]
+    assert check_skip_annotations(kept) == []
+    assert any("#21" in v for v in check_skip_annotations(dropped))
+
+
+@pytest.mark.parametrize("marker", [
+    "## Problem Statement", "## Solution", "## What to build", "## Acceptance",
+    "## System Architecture", "## Invariants", "## Program Design",
+])
+def test_each_spec_marker_alone_in_the_body_makes_an_issue_carry_a_spec(marker):
+    assert audit.issue_has_spec({"body": f"{marker}\nx"}) is True
+
+
+@pytest.mark.parametrize("issue", [
+    {"body": "## Problem Statement\nx"},
+    {"body": "prose", "comments": [{"body": "## Solution\nfix"}]},
+    {"body": "prose", "comments": [{"body": "Skipped — docs only"}]},
+    {"body": "Model SKIPPED — no flow"},
+])
+def test_issue_has_spec_is_true_for_a_marker_in_the_body_a_marker_in_a_comment_or_skipped(issue):
+    assert audit.issue_has_spec(issue) is True
+
+
+@pytest.mark.parametrize("issue", [
+    {"body": "fix the typo in the docs"},
+    {"body": "", "comments": []},
+    {"body": None, "comments": [{"body": "looks good"}, {"body": None}]},
+    {"body": "see the Solution below", "comments": [{"body": "### Notes"}]},
+])
+def test_issue_has_spec_is_false_for_prose_and_for_an_empty_or_none_body(issue):
+    assert audit.issue_has_spec(issue) is False
+
+
 def test_skip_annotations_detects_missing_both_with_empty_comments():
     """An empty comment list must not make the check vacuously green."""
     issues = [{
@@ -347,12 +390,12 @@ def test_handoff_repo_reads_the_declared_field():
 
 def test_followups_tracked_ignores_handoffs_of_another_repo():
     """The third false-positive class (2026-09-19): the corpus of handoffs is
-    shared by every project, the tracker is not. The example-project handoff
+    shared by every project, the tracker is not. The vault handoff
     citing its own #319 resolves at home and must not be judged here."""
     handoffs = [_handoff(
         "Closes #316 #317 #318 #319\n- Advisory: legacy note, already tracked\n",
         name="handoff-diario-mockup-fidelity-20260917.md",
-        repo="salvatorebottiglieri/example-project",
+        repo="acme/vault",
     )]
     assert check_followups_tracked(handoffs, {270}, REPO) == []
 
@@ -428,6 +471,7 @@ def _gh_stub(monkeypatch, *, rollup=None, rollup_error=False, runs=None,
              runs_error=False, head_ref=SHA):
     """Patch ``audit._gh``; returns the argv list of every call made."""
     calls: list[list[str]] = []
+    monkeypatch.setattr(audit, "GH_BACKOFF", 0)
 
     def fake(args):
         calls.append(list(args))
@@ -451,7 +495,7 @@ def _gh_stub(monkeypatch, *, rollup=None, rollup_error=False, runs=None,
     return calls
 
 
-def test_gather_prs_falls_back_to_actions_runs_when_rollup_unreadable(monkeypatch):
+def test_a_pr_whose_view_fails_still_falls_back_to_the_runs(monkeypatch):
     _gh_stub(monkeypatch, rollup_error=True, runs=[_run("CI", "success")])
     prs = gather_prs("owner/repo", "2026-09-01")
     assert len(prs) == 1
@@ -494,18 +538,22 @@ def test_gather_prs_fallback_without_runs_is_not_a_violation(monkeypatch):
     assert check_ci_before_merge(gather_prs("owner/repo", "2026-09-01")) == []
 
 
-def test_gather_prs_fallback_without_head_sha_skips_the_runs_channel(monkeypatch):
+def test_a_pr_whose_view_fails_without_head_sha_has_the_views_unread_and_skips_the_runs_channel(monkeypatch):
     calls = _gh_stub(monkeypatch, rollup_error=True, head_ref=None)
     prs = gather_prs("owner/repo", "2026-09-01")
-    assert prs[0]["statusCheckRollup"] == []
+    assert isinstance(prs[0]["statusCheckRollup"], audit.Unread)
+    assert prs[0]["statusCheckRollup"].call.startswith("gh pr view 12")
+    assert check_ci_before_merge(prs) == []
     assert not any(c[:2] == ["run", "list"] for c in calls)
 
 
-def test_gather_prs_fallback_survives_a_run_list_failure(monkeypatch):
+def test_a_pr_whose_view_and_runs_are_both_unreadable_has_an_unread_rollup_and_is_not_a_ci_violation(monkeypatch):
     """Both channels unreadable: 'cannot verify', never an exception."""
     _gh_stub(monkeypatch, rollup_error=True, runs_error=True)
     prs = gather_prs("owner/repo", "2026-09-01")
-    assert prs[0]["statusCheckRollup"] == []
+    rollup = prs[0]["statusCheckRollup"]
+    assert isinstance(rollup, audit.Unread)
+    assert rollup.call.startswith("gh run list")
     assert check_ci_before_merge(prs) == []
 
 
@@ -666,6 +714,59 @@ def test_i6_zero_actionable_advisory_never_blocks():
          "severity": "advisory", "reviewer": "ponytail", "status": "open"},
     ]
     assert check_i6_zero_actionable(reports) == []
+
+
+def _i6_row(verdict, **kw):
+    row = {"criterion": "1", "item_id": "AC-1", "verdict": verdict,
+           "severity": "fatal", "reviewer": "spec", "status": "open"}
+    row.update(kw)
+    return row
+
+
+@pytest.mark.parametrize("verdict", ["fail", "missing", "blind-test", "no-test"])
+def test_i6_open_fatal_non_pass_verdict_blocks(verdict):
+    violations = check_i6_zero_actionable([_i6_row(verdict)])
+    assert any("AC-1" in v and verdict in v for v in violations), violations
+
+
+@pytest.mark.parametrize("verdict", ["pass", "pinned", "n/a — not applicable"])
+def test_i6_open_fatal_pass_like_verdict_does_not_block(verdict):
+    assert check_i6_zero_actionable([_i6_row(verdict)]) == []
+
+
+def test_i6_blocker_closed_by_resolved_row_same_item_and_criterion():
+    reports = [
+        _i6_row("missing", _feature="f"),
+        _i6_row("pass", _feature="f", status="resolved"),
+    ]
+    assert check_i6_zero_actionable(reports) == []
+
+
+def test_i6_blocker_not_closed_by_resolved_row_of_other_criterion():
+    reports = [
+        _i6_row("missing", _feature="f"),
+        _i6_row("pass", _feature="f", status="fixed", criterion="2"),
+    ]
+    violations = check_i6_zero_actionable(reports)
+    assert any("AC-1" in v for v in violations), violations
+
+
+def test_i6_blocker_not_closed_by_resolved_row_of_other_feature():
+    """Characterization: the close key includes ``_feature``."""
+    reports = [
+        _i6_row("missing", _feature="f"),
+        _i6_row("pass", _feature="g", status="resolved"),
+    ]
+    assert any("AC-1" in v for v in check_i6_zero_actionable(reports))
+
+
+def test_i6_blocker_not_closed_by_resolved_row_of_other_item_id():
+    """Characterization: the close key includes ``item_id``."""
+    reports = [
+        _i6_row("missing", _feature="f"),
+        _i6_row("pass", _feature="f", status="resolved", item_id="AC-2"),
+    ]
+    assert any("AC-1" in v for v in check_i6_zero_actionable(reports))
 
 
 # ── B-025 voce 2: premises falsified ──────────────────────────────
@@ -915,3 +1016,575 @@ def test_audit_in_handoff_picks_latest_by_name():
     assert check_audit_in_handoff(handoffs) == []
 
 
+
+
+# ── #99 audit-speed: pooled, retried reads and unread items ───────────
+
+
+def _transient(failures, answer):
+    """A fake ``_gh``: raises RuntimeError *failures* times, then answers."""
+    attempts = []
+
+    def fake(args):
+        attempts.append(list(args))
+        if len(attempts) <= failures:
+            raise RuntimeError("gh failed: error connecting to api.github.com")
+        return answer
+
+    return fake, attempts
+
+
+CALL = ["api", "repos/o/r/commits/abc"]
+
+
+def test_a_transient_failure_is_retried_and_the_data_arrives(monkeypatch):
+    fake, attempts = _transient(2, {"ok": 1})
+    monkeypatch.setattr(audit, "_gh", fake)
+    assert audit._gh_many([CALL], sleep=lambda s: None) == [{"ok": 1}]
+    assert len(attempts) == 3
+
+
+def test_retries_wait_with_a_growing_backoff(monkeypatch):
+    fake, _ = _transient(2, {"ok": 1})
+    monkeypatch.setattr(audit, "_gh", fake)
+    waits = []
+    audit._gh_many([CALL], sleep=waits.append)
+    assert waits == [audit.GH_BACKOFF, 2 * audit.GH_BACKOFF]
+
+
+def test_a_persistent_failure_becomes_an_unread_item_naming_the_call_and_the_reason(monkeypatch):
+    fake, attempts = _transient(10**6, None)
+    monkeypatch.setattr(audit, "_gh", fake)
+    [got] = audit._gh_many([CALL], sleep=lambda s: None)
+    assert isinstance(got, audit.Unread)
+    assert got.call == "gh api repos/o/r/commits/abc"
+    assert "error connecting to api.github.com" in got.reason
+    assert got.reason.startswith("RuntimeError: ")
+    assert len(attempts) == audit.GH_ATTEMPTS
+
+
+def test_a_persistent_failure_stops_after_three_attempts_with_two_waits_and_none_after_the_last(monkeypatch):
+    fake, attempts = _transient(10**6, None)
+    monkeypatch.setattr(audit, "_gh", fake)
+    waits = []
+    [got] = audit._gh_many([CALL], sleep=waits.append)
+    assert isinstance(got, audit.Unread)
+    assert len(attempts) == 3
+    assert waits == [0.5, 1.0]
+
+
+def test_gather_pr_diffs_reads_all_the_commits_in_one_pooled_call(monkeypatch):
+    seen = []
+
+    def recorder(calls, sleep=None):
+        seen.append(calls)
+        return [{"files": []} for _ in calls]
+
+    monkeypatch.setattr(audit, "_gh_many", recorder)
+    reports = [{"commit": "b"}, {"commit": "a"}, {"commit": "a"}]
+    audit.gather_pr_diffs("o/r", reports)
+    assert seen == [[["api", "repos/o/r/commits/a"], ["api", "repos/o/r/commits/b"]]]
+
+
+def test_gather_prs_reads_all_the_pr_views_in_one_pooled_call(monkeypatch):
+    seen = []
+    monkeypatch.setattr(audit, "_gh", lambda args: [
+        {"number": n, "body": "", "headRefOid": f"s{n}"} for n in (1, 2, 3)])
+
+    def recorder(calls, sleep=None):
+        seen.append(calls)
+        return [{"state": "MERGED", "statusCheckRollup": []} for _ in calls]
+
+    monkeypatch.setattr(audit, "_gh_many", recorder)
+    audit.gather_prs("o/r", "2026-09-01")
+    assert seen == [[["pr", "view", str(n), "--repo", "o/r",
+                      "--json", "state,statusCheckRollup"] for n in (1, 2, 3)]]
+
+
+def test_a_failing_call_does_not_stop_the_other_calls(monkeypatch):
+    def fake(args):
+        if args[-1] == "c4":
+            raise RuntimeError("boom")
+        return {"id": args[-1]}
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    got = audit._gh_many([["x", f"c{n}"] for n in range(10)], sleep=lambda s: None)
+    assert [g for i, g in enumerate(got) if i != 4] == [
+        {"id": f"c{n}"} for n in range(10) if n != 4]
+    assert isinstance(got[4], audit.Unread) and got[4].call == "gh x c4"
+
+
+def test_an_unexpected_exception_in_a_read_is_an_unread_item_not_a_crash(monkeypatch):
+    def fake(args):
+        raise {"v": ValueError("no json"), "o": OSError("gh missing")}[args[0]]
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    got = audit._gh_many([["v"], ["o"]], sleep=lambda s: None)
+    assert [type(g) for g in got] == [audit.Unread, audit.Unread]
+    assert got[0].reason.startswith("ValueError: ")
+    assert got[1].reason.startswith("OSError: ")
+
+
+def test_results_come_back_in_the_order_of_the_requests(monkeypatch):
+    first_may_finish = threading.Event()
+
+    def fake(args):
+        if args[0] == "n0":
+            assert first_may_finish.wait(5), "the last call never ran"
+        if args[0] == "n7":
+            first_may_finish.set()
+        return {"id": args[0]}
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    got = audit._gh_many([[f"n{n}"] for n in range(8)], sleep=lambda s: None)
+    assert got == [{"id": f"n{n}"} for n in range(8)]
+
+
+def test_calls_run_concurrently_up_to_the_pool_size_and_no_more(monkeypatch):
+    barrier = threading.Barrier(8)
+    lock = threading.Lock()
+    state = {"now": 0, "max": 0}
+
+    def fake(args):
+        with lock:
+            state["now"] += 1
+            state["max"] = max(state["max"], state["now"])
+        try:
+            barrier.wait(timeout=5)
+        finally:
+            with lock:
+                state["now"] -= 1
+        return {"id": args[0]}
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    got = audit._gh_many([[f"n{n}"] for n in range(16)], sleep=lambda s: None)
+    assert all(isinstance(g, dict) for g in got)  # the barrier released: eight at once
+    assert state["max"] == 8
+
+
+def test_no_more_than_eight_reads_are_in_flight_at_once(monkeypatch):
+    """witness 24 reads that each hold 50 ms - distinguishes a pool of 8 (peak 8) from a wider pool
+    (peak well above 8); the Barrier test above only proves that eight can be at once."""
+    lock = threading.Lock()
+    state = {"now": 0, "max": 0}
+
+    def fake(args):
+        with lock:
+            state["now"] += 1
+            state["max"] = max(state["max"], state["now"])
+        time.sleep(0.05)
+        with lock:
+            state["now"] -= 1
+        return {"id": args[0]}
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    got = audit._gh_many([[f"n{n}"] for n in range(24)], sleep=lambda s: None)
+    assert len(got) == 24 and all(isinstance(g, dict) for g in got)
+    assert state["max"] <= 8
+
+
+def _commit_fake(unreadable=()):
+    def fake(args):
+        sha = args[1].rsplit("/", 1)[1]
+        if sha in unreadable:
+            raise RuntimeError(f"gh api failed: no commit {sha}")
+        return {"files": [{"patch": f"+line {sha}\n"}]}
+
+    return fake
+
+
+def _twenty_commit_reports():
+    return [{"commit": f"c{n:02d}", "quote": f"+line c{n:02d}" if n % 3 else "+absent",
+             "item_id": str(n), "criterion": "4"} for n in range(20)]
+
+
+def test_the_same_answers_give_the_same_diffs_in_a_pool_of_one_and_of_eight(monkeypatch):
+    monkeypatch.setattr(audit, "_gh", _commit_fake())
+    monkeypatch.setattr(audit, "GH_BACKOFF", 0)
+    reports = _twenty_commit_reports()
+    results = {}
+    for workers in (1, 8):
+        monkeypatch.setattr(audit, "GH_WORKERS", workers)
+        diffs = audit.gather_pr_diffs("o/r", reports)
+        results[workers] = (list(diffs.items()),
+                            check_reviewer_evidence_verbatim(reports, diffs))
+    assert len(results[1][0]) == 20 and results[1][1]  # witness: violations exist
+    assert results[1] == results[8]
+
+
+def test_the_same_answers_give_the_same_pr_rollups_in_a_pool_of_one_and_of_eight(monkeypatch):
+    monkeypatch.setattr(audit, "GH_BACKOFF", 0)
+
+    def fake(args):
+        if args[:2] == ["pr", "list"]:
+            return [{"number": n, "body": "Fixes #1", "headRefOid": f"s{n}"}
+                    for n in range(1, 21)]
+        if args[:2] == ["pr", "view"]:
+            n = int(args[2])
+            if n % 5 == 0:
+                raise RuntimeError("gh pr view failed: no access")
+            return {"state": "MERGED", "statusCheckRollup": [
+                {"name": "CI", "conclusion": "FAILURE" if n % 3 == 0 else "SUCCESS"}]}
+        if args[:2] == ["run", "list"]:
+            return [{"name": "CI", "status": "completed", "event": "pull_request",
+                     "conclusion": "failure"}]
+        raise AssertionError(args)
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    results = {}
+    for workers in (1, 8):
+        monkeypatch.setattr(audit, "GH_WORKERS", workers)
+        prs = gather_prs("o/r", "2026-09-01")
+        results[workers] = (prs, check_ci_before_merge(prs))
+    assert len(results[1][1]) > 5  # witness: violations exist
+    assert results[1] == results[8]
+
+
+def test_gather_pr_diffs_keeps_the_readable_commits_when_one_is_unreadable(monkeypatch):
+    monkeypatch.setattr(audit, "GH_BACKOFF", 0)
+    monkeypatch.setattr(audit, "_gh", _commit_fake(unreadable={"bad"}))
+    diffs = audit.gather_pr_diffs(
+        "o/r", [{"commit": "aaa"}, {"commit": "bad"}, {"commit": "zzz"}])
+    assert diffs["aaa"] == "+line aaa" and diffs["zzz"] == "+line zzz"
+    assert isinstance(diffs["bad"], audit.Unread)
+    assert diffs["bad"].call == "gh api repos/o/r/commits/bad"
+
+
+def test_gather_pr_diffs_marks_a_non_dict_response_as_unread(monkeypatch):
+    monkeypatch.setattr(audit, "_gh", lambda args: ["not", "a", "dict"])
+    diffs = audit.gather_pr_diffs("o/r", [{"commit": "abc"}])
+    assert isinstance(diffs["abc"], audit.Unread)
+    assert "unexpected API response" in diffs["abc"].reason
+
+
+def test_an_unread_commit_is_not_a_b025_8_violation():
+    unread = audit.Unread("gh api repos/o/r/commits/aaaaaaaa1", "RuntimeError: x")
+    reports = [
+        {"commit": "aaaaaaaa1", "quote": "+q", "item_id": "1", "criterion": "4"},
+        {"commit": "bbbbbbbb2", "quote": "+q", "item_id": "2", "criterion": "4"},
+        {"commit": "bbbbbbbb2", "item_id": "3", "criterion": "4"},
+    ]
+    got = check_reviewer_evidence_verbatim(
+        reports, {"aaaaaaaa1": unread, "bbbbbbbb2": "+other"})
+    assert got == [
+        ("[B-025/8] finding item_id=2 criterion=4 commit=bbbbbbbb: "
+         "quote does not appear verbatim in diff"),
+        ("[B-025/8] finding item_id=3 criterion=4 claim=code: "
+         "missing quote or commit (cannot verify)"),
+    ]
+
+
+def _main_world(monkeypatch, tmp_path, *, reports, diffs, prs=()):
+    """Stub every gatherer so only the diffs/prs under test can be wrong."""
+    store = tmp_path / "r.sqlite"
+    store.write_text("")
+    for name, value in (
+        ("gather_prs", lambda repo, since: list(prs)),
+        ("gather_issues", lambda repo, since: []),
+        ("gather_gate_config", lambda repo: {"configured": {}, "ci_text": ""}),
+        ("gather_handoffs", lambda days=7: []),
+        ("gather_known_refs", lambda repo: set()),
+        ("check_recent_handoff", lambda handoffs: []),
+        ("gather_reviewer_reports", lambda repo, store=None: reports),
+        ("gather_brief_items", lambda repo, store=None: {"f": ["1", "2"]}),
+        ("gather_feature_dates", lambda repo, store=None: {}),
+        ("gather_pr_diffs", lambda repo, reps: diffs),
+    ):
+        monkeypatch.setattr(audit, name, value)
+    monkeypatch.setattr(sys, "argv", ["audit.py", "--repo", "o/r", "--store", str(store)])
+
+
+def _row_for(item, commit, quote):
+    return {"repo": "o/r", "actor": "spec-1", "criterion": "4", "claim": "code",
+            "item_id": item, "verdict": "pass", "severity": "minor",
+            "reviewer": "spec", "status": "resolved", "_feature": "f",
+            "commit": commit, "quote": quote}
+
+
+UNREAD = audit.Unread("gh api repos/o/r/commits/unreadcommit", "RuntimeError: boom")
+
+
+def test_main_lists_unread_items_after_the_violations_and_exits_1(
+        monkeypatch, tmp_path, capsys):
+    _main_world(monkeypatch, tmp_path,
+                reports=[_row_for("1", "unreadcommit", "+q"),
+                         _row_for("2", "goodcommit1", "+nope")],
+                diffs={"unreadcommit": UNREAD, "goodcommit1": "+other"})
+    assert audit.main() == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == "1 violation(s):"
+    assert out[1].startswith("  - [B-025/8] finding item_id=2")
+    assert out[2] == ("1 item(s) could not be read "
+                      "(not checked; this is not a pass):")
+    assert out[3] == "  - gh api repos/o/r/commits/unreadcommit: RuntimeError: boom"
+    assert len(out) == 4
+
+
+def test_main_with_only_unread_items_prints_no_ok_and_exits_as_decision_1_says(
+        monkeypatch, tmp_path, capsys):
+    _main_world(monkeypatch, tmp_path,
+                reports=[_row_for("1", "unreadcommit", "+q"),
+                         _row_for("2", "goodcommit1", "+same")],
+                diffs={"unreadcommit": UNREAD, "goodcommit1": "+same"})
+    assert audit.main() == 1
+    out = capsys.readouterr().out
+    assert "ok — all workflow invariants hold" not in out
+    assert "violation(s)" not in out
+    assert "1 item(s) could not be read (not checked; this is not a pass):" in out
+    assert "  - gh api repos/o/r/commits/unreadcommit: RuntimeError: boom" in out
+
+
+def test_main_lists_an_unread_pr_rollup_too(monkeypatch, tmp_path, capsys):
+    pr = {"number": 7, "merged": True, "body": "Fixes #1", "mergedAt": "2020-01-01",
+          "statusCheckRollup": audit.Unread("gh pr view 7", "RuntimeError: nope")}
+    _main_world(monkeypatch, tmp_path, reports=[], diffs={}, prs=[pr])
+    monkeypatch.setattr(audit, "gather_brief_items", lambda repo, store=None: {})
+    assert audit.main() == 1
+    out = capsys.readouterr().out
+    assert "  - gh pr view 7: RuntimeError: nope" in out
+    assert "ok — all workflow invariants hold" not in out
+
+
+def test_main_with_nothing_wrong_and_nothing_unread_prints_ok_and_exits_0(
+        monkeypatch, tmp_path, capsys):
+    _main_world(monkeypatch, tmp_path,
+                reports=[_row_for("1", "goodcommit1", "+same"),
+                         _row_for("2", "goodcommit1", "+same")],
+                diffs={"goodcommit1": "+same"})
+    assert audit.main() == 0
+    assert capsys.readouterr().out == "ok — all workflow invariants hold\n"
+
+
+def test_a_failed_pr_list_still_aborts_with_an_error(monkeypatch, tmp_path, capsys):
+    _main_world(monkeypatch, tmp_path, reports=[], diffs={})
+
+    def boom(repo, since):
+        raise RuntimeError("gh pr list failed: HTTP 502")
+
+    monkeypatch.setattr(audit, "gather_prs", boom)
+    assert audit.main() == 1
+    assert "error: gh pr list failed: HTTP 502" in capsys.readouterr().err
+
+
+# --- audit-window #102: the --since window also bounds the reviewer rows --------------------------
+
+def _dated_store(tmp_path, features):
+    """A store of dated features, inserted directly: the module's writer stamps recorded_at with now() and these tests need chosen dates."""
+    import json
+    mod = audit._store_module()
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    conn = mod.open_store(tmp_path / "w.sqlite")
+    with conn:
+        for f in features:
+            for r in f["rows"]:
+                conn.execute(
+                    "INSERT INTO review_row (recorded_at, repo, feature, report, item_id, criterion,"
+                    " verdict, severity, status, actor, row_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (f["at"], "o/r", f["name"], f"{f['name']}-spec", r["item_id"], r["criterion"],
+                     r["verdict"], r["severity"], r.get("status", "open"), r.get("actor", ""),
+                     json.dumps(r)))
+            for item in f["brief"]:
+                conn.execute("INSERT INTO brief_item (repo, feature, item_id, recorded_at) VALUES (?,?,?,?)",
+                             ("o/r", f["name"], item, f["at"]))
+    conn.close()
+    return tmp_path / "w.sqlite"
+
+
+def test_gather_feature_dates_with_no_store_is_empty_and_creates_nothing(tmp_path):
+    gone = tmp_path / "state" / "reports.sqlite"
+    assert audit.gather_feature_dates("o/r", store=None) == {}
+    assert audit.gather_feature_dates("o/r", store=gone) == {}
+    assert not gone.exists() and not gone.parent.exists()
+
+
+def test_gather_feature_dates_reads_the_dates_of_the_store_without_writing_it(tmp_path):
+    store = _dated_store(tmp_path, [_feature("a", "2026-11-05T10:00:00", ["1"])])
+    before = store.read_bytes()
+    assert audit.gather_feature_dates("o/r", store=store) == {"a": "2026-11-05T10:00:00"}
+    assert store.read_bytes() == before
+
+
+def _wrow(feature, item, **over):
+    return {**{k: v for k, v in _row_for(item, f"sha-{feature}", f"+line sha-{feature}").items()
+               if k != "_feature"}, "severity": "advisory", **over}
+
+
+def _feature(name, at, items, *, brief=None, **over):
+    """A feature to store: rows citing ``sha-<name>`` (the quote is in that commit's fake diff) and its brief."""
+    return {"name": name, "at": at, "rows": [_wrow(name, i, **over) for i in items],
+            "brief": list(items) if brief is None else brief}
+
+
+def _window_main(monkeypatch, tmp_path, features, since, *, unreadable=()):
+    """Run ``main`` on a dated store with only the PR/issue/handoff gathers stubbed; returns
+    (exit code, the commits read from GitHub). ``_gh`` answers commit reads only."""
+    store = _dated_store(tmp_path, features)
+    for name, value in (
+        ("gather_prs", lambda repo, since: []),
+        ("gather_issues", lambda repo, since: []),
+        ("gather_gate_config", lambda repo: {"configured": {}, "ci_text": ""}),
+        ("gather_handoffs", lambda days=7: []),
+        ("gather_known_refs", lambda repo: set()),
+        ("check_recent_handoff", lambda handoffs: []),
+    ):
+        monkeypatch.setattr(audit, name, value)
+    monkeypatch.setattr(audit, "GH_BACKOFF", 0)
+    commits: list[str] = []
+    inner = _commit_fake(unreadable)
+
+    def fake(args):
+        commits.append(args[1].rsplit("/", 1)[1])
+        return inner(args)
+
+    monkeypatch.setattr(audit, "_gh", fake)
+    monkeypatch.setattr(sys, "argv", ["audit.py", "--repo", "o/r", "--store", str(store), "--since", since])
+    return audit.main, commits
+
+
+OLD, NEW = "2026-10-01T09:00:00", "2026-11-15T09:00:00"
+
+
+def test_a_feature_dated_before_since_is_left_out_with_all_its_rows_and_its_brief():
+    rows = [{"_feature": "old", "item_id": "1"}, {"_feature": "old", "item_id": "2"},
+            {"_feature": "new", "item_id": "1"}]
+    kept, briefs, left_out = audit.apply_window(
+        rows, {"old": ["1", "2"], "new": ["1"]}, {"old": OLD, "new": NEW}, "2026-11-01")
+    assert kept == [{"_feature": "new", "item_id": "1"}]
+    assert briefs == {"new": ["1"]} and left_out == {"old": 2}
+
+
+def test_a_feature_dated_on_since_is_kept():
+    rows = [{"_feature": "edge", "item_id": "1"}]
+    kept, briefs, left_out = audit.apply_window(
+        rows, {"edge": ["1"]}, {"edge": "2026-11-01T00:00:00"}, "2026-11-01")
+    assert (kept, briefs, left_out) == (rows, {"edge": ["1"]}, {})
+
+
+def test_a_feature_dated_days_before_since_in_the_same_month_is_left_out():
+    rows = [{"_feature": "early", "item_id": "1"}]
+    kept, briefs, left_out = audit.apply_window(
+        rows, {"early": ["1"]}, {"early": "2026-11-05T09:00:00"}, "2026-11-10")
+    assert (kept, briefs, left_out) == ([], {}, {"early": 1})
+
+
+def test_a_feature_dated_the_last_second_before_since_is_left_out():
+    rows = [{"_feature": "eve", "item_id": "1"}]
+    kept, briefs, left_out = audit.apply_window(
+        rows, {"eve": ["1"]}, {"eve": "2026-10-31T23:59:59"}, "2026-11-01")
+    assert (kept, briefs, left_out) == ([], {}, {"eve": 1})
+
+
+def test_a_feature_that_straddles_the_edge_is_kept_whole():
+    # witness: the feature's date is its LATEST row (the second), the first row alone is older than since
+    rows = [{"_feature": "f", "item_id": "1", "at": "2026-10-30"}, {"_feature": "f", "item_id": "2"}]
+    kept, briefs, left_out = audit.apply_window(rows, {"f": ["1", "2"]}, {"f": "2026-11-02T08:00:00"}, "2026-11-01")
+    assert kept == rows and briefs == {"f": ["1", "2"]} and left_out == {}
+
+
+def test_a_feature_with_no_date_is_kept():
+    rows = [{"_feature": "undated", "item_id": "1"}]
+    assert audit.apply_window(rows, {"undated": ["1"]}, {}, "2026-11-01") == (
+        rows, {"undated": ["1"]}, {})
+
+
+def test_left_out_counts_rows_per_feature_and_a_brief_only_feature_counts_zero():
+    rows = [{"_feature": "a", "item_id": "1"}, {"_feature": "a", "item_id": "2"}]
+    _, briefs, left_out = audit.apply_window(
+        rows, {"a": ["1", "2"], "b": ["1"]}, {"a": OLD, "b": OLD}, "2026-11-01")
+    assert left_out == {"a": 2, "b": 0} and briefs == {}
+
+
+def test_the_window_note_is_empty_when_nothing_was_left_out():
+    assert audit.window_note({}) == []
+    assert audit.window_note({"only-brief": 0}) != []  # witness: a left-out feature gives a note
+
+
+def test_the_window_note_says_how_many_rows_and_lists_each_feature_sorted():
+    assert audit.window_note({"zeta": 3, "alpha": 1, "mid": 0}) == [
+        "4 reviewer rows older than the window were not checked",
+        "  - alpha: 1 row(s)",
+        "  - mid: 0 row(s)",
+        "  - zeta: 3 row(s)",
+    ]
+
+
+def test_main_does_not_read_the_commits_of_a_feature_left_out(monkeypatch, tmp_path):
+    run, commits = _window_main(monkeypatch, tmp_path, [
+        _feature("old", OLD, ["1", "2"]), _feature("new", NEW, ["1"])], "2026-11-01")
+    run()
+    assert commits == ["sha-new"]
+
+
+def test_main_reads_the_commits_of_every_feature_when_since_is_earlier(monkeypatch, tmp_path):
+    run, commits = _window_main(monkeypatch, tmp_path, [
+        _feature("old", OLD, ["1"]), _feature("new", NEW, ["1"])], "2000-01-01")
+    run()
+    assert sorted(commits) == ["sha-new", "sha-old"]
+
+
+def _four_violations(name, at):
+    """One feature that breaks B-004 (no actor), B-025/8 (quote not in the diff), I6 (open fatal), B-025/9."""
+    return {"name": name, "at": at, "brief": ["1", "2", "3", "9"], "rows": [
+        _wrow(name, "1", actor=""),
+        _wrow(name, "2", quote="+not in the diff"),
+        _wrow(name, "3", claim="coverage", verdict="fail", severity="fatal", status="open"),
+    ]}
+
+
+def test_main_applies_the_one_window_to_every_reviewer_check(monkeypatch, tmp_path, capsys):
+    run, _ = _window_main(monkeypatch, tmp_path / "in", [_four_violations("f", NEW)], "2026-11-01")
+    assert run() == 1
+    inside = capsys.readouterr().out
+    tags = {line.split("]")[0].split("[")[1] for line in inside.splitlines() if line.startswith("  - [")}
+    assert tags == {"B-004", "B-025/8", "I6/B-025/10", "B-025/9"}  # witness: the data does break all four
+    run, _ = _window_main(monkeypatch, tmp_path / "out", [_four_violations("f", OLD)], "2026-11-01")
+    run()
+    outside = capsys.readouterr().out
+    assert "[B-004]" not in outside and "[B-025" not in outside and "[I6" not in outside
+
+
+def test_main_keeps_the_verdicts_of_the_kept_features(monkeypatch, tmp_path, capsys):
+    features = [_four_violations("kept", NEW), _four_violations("old", OLD)]
+    features[1]["rows"] = [{**r, "item_id": "old-" + r["item_id"]} for r in features[1]["rows"]]
+    features[1]["brief"] = ["old-1", "old-2", "old-3", "old-9"]
+    run, _ = _window_main(monkeypatch, tmp_path / "full", features, "2000-01-01")
+    run()
+    full = capsys.readouterr().out.splitlines()
+    run, _ = _window_main(monkeypatch, tmp_path / "cut", features, "2026-11-01")
+    run()
+    cut = [line for line in capsys.readouterr().out.splitlines() if line.startswith("  - [")]
+    expected = [line for line in full if line.startswith("  - [") and "old" not in line]
+    assert len(expected) == 4 and len(full) > len(expected) + 1  # witness: old features add violations
+    assert cut == expected
+
+
+def test_main_prints_the_note_after_the_violations_and_before_the_unread_block_and_keeps_the_exit_code(
+        monkeypatch, tmp_path, capsys):
+    kept = _feature("kept", NEW, ["1", "2"])
+    kept["rows"][0]["actor"] = ""
+    kept["rows"][1]["commit"] = "unreadcommit"
+    run, _ = _window_main(monkeypatch, tmp_path, [kept, _feature("old", OLD, ["1", "2"])],
+                          "2026-11-01", unreadable={"unreadcommit"})
+    assert run() == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == "1 violation(s):"
+    assert out[1] == "  - [B-004] report kept/1 has no actor"
+    assert out[2:4] == ["2 reviewer rows older than the window were not checked", "  - old: 2 row(s)"]
+    assert out[4].startswith("1 item(s) could not be read")
+
+
+def test_main_clean_run_with_a_note_prints_the_note_then_ok_and_exits_0(monkeypatch, tmp_path, capsys):
+    run, _ = _window_main(monkeypatch, tmp_path, [
+        _feature("old", OLD, ["1", "2"]), _feature("new", NEW, ["1"])], "2026-11-01")
+    assert run() == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "2 reviewer rows older than the window were not checked",
+        "  - old: 2 row(s)",
+        "ok — all workflow invariants hold",
+    ]
+
+
+def test_main_without_a_window_effect_prints_today_s_output_and_no_note(monkeypatch, tmp_path, capsys):
+    run, _ = _window_main(monkeypatch, tmp_path, [_feature("new", NEW, ["1"])], "2026-11-01")
+    assert run() == 0
+    assert capsys.readouterr().out == "ok — all workflow invariants hold\n"

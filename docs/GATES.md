@@ -12,7 +12,8 @@ the install is idempotent. Both require Python >= 3.11 (`tomllib`).
 - **pre-push** — runs the DesignDoc gate over `docs/design/*.md` at push time
   (signatures against the real code, coherence, the four exit kinds, the
   external frontier). A repository without `docs/design/` has nothing to
-  check and the hook exits 0.
+  check and the hook exits 0. It also runs `tests/test_kit_export.py` when the
+  repository has that file, so a rules edit cannot break the kit export unseen.
 
 Install both into a repository's top level:
 

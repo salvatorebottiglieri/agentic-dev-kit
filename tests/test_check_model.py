@@ -268,3 +268,29 @@ def test_cli_fails_without_approval(tmp_path: Path) -> None:
     )
     assert proc.returncode == 1
     assert "approval URL" in proc.stdout
+
+
+# --- #100 (gate-sections): the headings the model check contracts ---------------------------------
+
+def test_contracted_sections_are_the_four_required_for_a_model_with_no_moving_entity() -> None:
+    """witness an inventory that says `no` and a model that still carries `## Sequence` - the
+    result is the four required headings in the check's order and nothing else (an optional
+    heading is not contracted)."""
+    text = _model(lifecycle_moves="no", state_section=False)
+    assert CM.contracted_sections(text) == ("lifecycle inventory", "elements", "flow", "model changes")
+
+
+def test_contracted_sections_add_state_machines_when_the_inventory_says_an_entity_moves() -> None:
+    """witness a model whose inventory has a moving entity against the same model with its inventory
+    turned to `no` - distinguishes a constant list from one that reads the inventory."""
+    text = _model(lifecycle_moves="yes", state_section=True)
+    assert CM.contracted_sections(text) == (
+        "lifecycle inventory", "elements", "flow", "model changes", "state machines")
+    assert "state machines" not in CM.contracted_sections(_model(lifecycle_moves="no", state_section=False))
+
+
+def test_removing_state_machines_from_a_model_that_moves_makes_check_model_fail(tmp_path: Path) -> None:
+    """pins that `state machines` is contracted: the check says it is missing."""
+    text = _model(lifecycle_moves="yes", state_section=False)
+    violations = CM.check_model_text(text, facts=FACTS, root=tmp_path)
+    assert any("but ## State machines is missing" in v for v in violations), violations

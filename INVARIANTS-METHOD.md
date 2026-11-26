@@ -2,7 +2,7 @@
 
 > How to define a system's invariants and use them to make tests effective.
 > Method distilled from the example stress campaign (see
-> `CASE-STUDY-MEMEX.md` for the full application) and integrated into the
+> `CASE-STUDY-EXAMPLE.md` for the full application) and integrated into the
 > workflow: the `## System Invariants` section produced by
 > system-architecture and consumed by implement-loop.
 >

@@ -13,10 +13,8 @@ audit gate that enforce it.
 
 The method is **agent-agnostic**: `WORKFLOW.md` is plain process, readable by
 any agent. The skills ship in the portable *agent-skills* (`SKILL.md`) format,
-which Claude Code loads natively and other agents can adopt.
-
-`WORKFLOW.md` is the entry point: it defines the pipeline every session
-follows (design → product review → system architecture → tickets → program
+which Claude Code loads natively and other agents can adopt. `WORKFLOW.md` is
+the entry point: it defines the pipeline every session follows (design → product review → system architecture → tickets → program
 design → implement-loop) and the review criteria family that gates a merge.
 
 ## What's in here
@@ -28,6 +26,9 @@ design → implement-loop) and the review criteria family that gates a merge.
 | `RATIONALE.md` | The *why* of every load-bearing rule. |
 | `skills/` | The custom skills the workflow invokes (`implement-loop`, `product-review`, `system-architecture`, `modular-monolith`, `program-design`, `uml-modeling`). |
 | `docs/GATES.md` | Gate configuration, `final` mode, bypasses and known limits. |
+| `wf.py` + `report_store.py` | The phase harness (`wf.py next <feature>` prints and gates each phase) and the report store. |
+| `app/` | The desktop window: every feature, its phase and its documents. See `app/README.md`. |
+| `gen-flow.py` + `FLOW.md` | The map of the method, generated from `WORKFLOW.md` and checked by `gen-flow.py --check`. |
 | `audit.py` + `tests/` | The session-end gate: verifies the invariants against the tracker. |
 | `handoffs/` | Where your own session handoffs land (starts empty). |
 
@@ -49,49 +50,60 @@ skills that slot into the flow.
 # 2. this kit
 git clone https://github.com/salvatorebottiglieri/agentic-dev-kit.git ~/agentic-dev-kit
 cd ~/agentic-dev-kit
-./install.sh
-```
-
-`install.sh` symlinks the custom skills from `skills/` into your agent's skills
-directory and leaves the docs and `audit.py` in the clone. It defaults to
-`~/.claude/skills` (Claude Code); point it elsewhere for any other agent:
-
-```bash
 AGENT_SKILLS_DIR=~/.agents/skills ./install.sh
 ```
 
-It never overwrites a skill you already have without asking.
+`install.sh` symlinks the custom skills from `skills/` into the agent-neutral
+store `~/.agents/skills`, where `wf.py` looks for them (`$AGENT_SKILLS_DIR`
+overrides it for both). Without that variable it links into `~/.claude/skills`,
+which `wf.py` does not read. It never overwrites a skill you already have
+without asking. Claude Code reads its own directory, so point it
+into the store:
+
+```bash
+mkdir -p ~/.claude/skills; for s in ~/.agents/skills/*; do [ -e ~/.claude/skills/${s##*/} ] || ln -s ../../.agents/skills/${s##*/} ~/.claude/skills/${s##*/}; done
+```
 
 ## Using it
 
 Have your coding agent read `~/agentic-dev-kit/WORKFLOW.md` at the start of any
-non-trivial coding work — the usual way is a rule in the agent's global or
-project instructions file (`CLAUDE.md`, `AGENTS.md`, or your agent's
-equivalent). Then follow its phases. A typo fix, a one-line config change, or a
-question about code does not need the pipeline.
+non-trivial coding work: a rule in its instructions file (`CLAUDE.md`,
+`AGENTS.md` or equivalent). A typo fix, a one-line config change, or a question
+about code does not need the pipeline.
+
+## The harness and the window
+
+`python3 ~/agentic-dev-kit/wf.py next <feature>` prints and gates each phase
+(`end`, `report` and `post-spec` close a session, store review reports and post
+the spec to tickets). Its state lives in `~/.local/state/agentic-dev-kit`, or
+`$XDG_STATE_HOME/agentic-dev-kit`. A phase skill that is not installed prints as
+`MISSING SKILL <name>`: install it into `$AGENT_SKILLS_DIR`, else
+`~/.agents/skills`. `python3 ~/agentic-dev-kit/app/desk.py serve` plus any
+browser shows the window. Only the server and a browser are needed; the Edge and
+terminal buttons, `gh` (for `wf.py end` and `post-spec`), `--remote-host` and
+`--jira-url` are optional: see [`app/README.md`](app/README.md). `LESSONS.md` is
+optional and not shipped: put your own next to `WORKFLOW.md` and phase 0 prints it.
+
+The kit's own tests: `python3 -m pytest -q` from the clone (`node` is optional,
+for the panel tests). The mutation prover, `guards/mutation_prover.py`, is run as
+`phases/6-implement-loop.md` says.
 
 ## Model
 
-`uml-modeling` produces the per-feature model in
-`docs/models/<feature>.md`: a flow, the interaction sequences, and a state
-machine for every entity whose lifecycle moves in time. The model is for a
-reader who does not read the code; the `## Elements` table ties every diagram
-ID to a module, symbol, entity or route, and `check_model.py` verifies the
-shape and — with `--gate` — that the skeleton still exists in the code. The
-Python adapter is built in; any other language can pass a `model-facts/1`
-JSON with `--facts` or keep it at `docs/models/facts.json`. The model is
-default-on and skippable with a reason (`Model: n/a — <reason>` in the PR).
+`uml-modeling` produces the per-feature model in `docs/models/<feature>.md`: a
+flow, the interaction sequences, and a state machine for every entity whose
+lifecycle moves in time. Its `## Elements` table ties every diagram ID to code,
+and `check_model.py --gate` verifies that the skeleton still exists (Python
+built in; other languages pass `--facts`). Default-on, skippable with a reason
+(`Model: n/a — <reason>` in the PR).
 
 ## Gates
 
 `install.sh --gate <repo>` installs two repository-local git hooks, with no
 global config: a **pre-commit** gate that computes skipped tests and stale
 pins into `.workflow/gate-report.md`, and a **pre-push** gate over
-`docs/design/` and, when present, `docs/models/`. A repository without those
-directories has nothing to check.
-
-Detailed configuration, `final` mode, bypasses and known limits:
-[`docs/GATES.md`](docs/GATES.md).
+`docs/design/` and, when present, `docs/models/`. Configuration, `final` mode,
+bypasses and known limits: [`docs/GATES.md`](docs/GATES.md).
 
 ## Caveats
 
@@ -102,16 +114,17 @@ Detailed configuration, `final` mode, bypasses and known limits:
   that don't support it can still follow `WORKFLOW.md` and read each
   `skills/<name>/SKILL.md` as a plain instruction file.
 - The custom skills marked *WIP* in their own `SKILL.md`
-  (`product-review`, `system-architecture`, `program-design`, `uml-modeling`)
-  are first versions, not yet battle-tested.
+  (`product-review`, `system-architecture`, `program-design`, `uml-modeling`) are
+  first versions, not yet battle-tested.
 
 ## Versioning
 
 Released under [Semantic Versioning](https://semver.org/); see
 [`CHANGELOG.md`](CHANGELOG.md) and the git tags. Pin a specific version by
-checking out its tag (e.g. `git checkout v0.1.0`).
+checking out its tag (e.g. `git checkout v0.6.0`).
 
 ## License
 
-MIT — see `LICENSE`. The base-layer skills are Matt Pocock's, under his repo's
-MIT license — not redistributed here; install them from the upstream.
+MIT — see `LICENSE`. Third-party code (the vendored Mermaid and marked bundles):
+[`NOTICE`](NOTICE). The base-layer skills are Matt Pocock's, under his repo's MIT
+license, not redistributed here.

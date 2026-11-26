@@ -1,5 +1,5 @@
 #!/bin/sh
-# pre-push — the DesignDoc gate.
+# pre-push — the DesignDoc gate (plus the model, fixtures and kit-export gates).
 #
 # Runs `guards/check_design.py --gate` over every document in docs/design/
 # (signatures + coherence + exits + frontier; NOT the design's state, which
@@ -27,5 +27,11 @@ manifest="$root/tests/fixtures/PROVENANCE.md"
 if [ -e "$manifest" ]; then
   echo "check-fixtures: tests/fixtures/PROVENANCE.md"
   python3 "$(dirname "$0")/../check_fixtures.py" "$manifest" "$root" || status=1
+fi
+# #73 — the fast kit-export tests (measured 2026-11-26: 22 tests in about 1 s, 2 s wall), when the repo has them. The tests that generate the whole kit are opt-in (KIT_RELEASE=1, run at release: KIT-EXPORT.md).
+kit_tests="$root/tests/test_kit_export.py"
+if [ -e "$kit_tests" ]; then
+  echo "kit-export: tests/test_kit_export.py"
+  (cd "$root" && python3 -m pytest -q "$kit_tests") || status=1
 fi
 exit "$status"

@@ -15,6 +15,10 @@ from pathlib import Path
 import pytest
 
 KIT = Path(__file__).resolve().parent.parent
+# install.sh sits at the root of a generated kit and under kit/ in the canonical repo; its --gate mode
+# resolves guards/ in both layouts.
+INSTALL_SH = next((p for p in (KIT / "install.sh", KIT / "kit" / "install.sh") if p.is_file()), None)
+assert INSTALL_SH, f"no install.sh at {KIT} or {KIT / 'kit'}: neither the kit layout nor the canonical one"
 sys.path.insert(0, str(KIT / "guards"))
 
 import gate  # noqa: E402
@@ -770,7 +774,7 @@ def kit_env(tmp_path, git_env) -> dict[str, str]:
 
 
 def test_install_sh_gate_flag_installs_the_hook_without_touching_skills(tmp_path, kit_env, bare_repo):
-    result = subprocess.run(["bash", str(KIT / "install.sh"), "--gate", str(bare_repo)],
+    result = subprocess.run(["bash", str(INSTALL_SH), "--gate", str(bare_repo)],
                             env=kit_env, capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
@@ -780,7 +784,7 @@ def test_install_sh_gate_flag_installs_the_hook_without_touching_skills(tmp_path
 
 @pytest.mark.parametrize("extra", [[], ["a", "b"]])
 def test_install_sh_gate_flag_with_a_wrong_argument_count_prints_usage_and_exits_2(kit_env, extra):
-    result = subprocess.run(["bash", str(KIT / "install.sh"), "--gate", *extra],
+    result = subprocess.run(["bash", str(INSTALL_SH), "--gate", *extra],
                             env=kit_env, capture_output=True, text=True)
 
     assert result.returncode == 2

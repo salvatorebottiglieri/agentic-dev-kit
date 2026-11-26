@@ -134,8 +134,8 @@ other access to it):
   through, swap a sibling column, coalesce a default, flip a boundary); the
   script applies it in a clean worktree, sets `PYTHONPATH` on that worktree,
   runs the **control first** (green/no-test → matrix `inconclusive`, exit 1),
-  then the targeted suite, and emits a JSONL matrix `pinned` / `blind-test` /
-  `no-test` / `error` with each diff. **Green mutant = the test is blind** →
+  then the targeted suite, and stores the matrix in the report store under
+  `--name` — `pinned` / `blind-test` / `no-test` / `error` with each diff. **Green mutant = the test is blind** →
   `fatal`, and the finding ships the mutation diff, so the claim is
   reproducible instead of trusted. The script removes every worktree; mutmut
   is optional and consultative, never a gate. **No other role applies
@@ -167,8 +167,10 @@ the family is curated, not grown by habit.
 > la struttura, e le regole "verbatim quote" (criterio 4) e "ogni item del
 > brief" (criterio 7) diventavano giudizi, non verifiche. Lo stesso errore
 > dell'SQL tenuto in una stringa. Soluzione: ogni reviewer emette **righe
-> con schema fisso** in un file `reports/<feature>-<axis>.jsonl`, e il
-> markdown per l'umano viene renderizzato da quello.
+> con schema fisso** — fino al 2026-11-17 in un file
+> `reports/<feature>-<axis>.jsonl`, da #70 (report-store) nel report store
+> con `wf.py report add` — e il markdown per l'umano viene renderizzato da
+> quelle righe.
 
 Ogni reviewer emette **una riga JSON per finding**, newline-delimited
 (JSONL). Lo schema canonico, **owned by this document**:
@@ -190,11 +192,13 @@ Ogni reviewer emette **una riga JSON per finding**, newline-delimited
 | `actor` | string | sì | il sub-agente che ha emesso la riga (es. `spec-1`, `mutation-a`): è il dato che D-031 userà per l'isolamento; un report senza `actor` è una violazione di formato |
 | `status` | enum | no, default `open` | `open` / `resolved` / `fixed` / `deferred`: solo `open` + `severity=fatal` + `verdict=actionable` è una violazione I6 |
 
-**Brief manifest.** Prima di lanciare i reviewer, l'orchestratore scrive
-`reports/<feature>-brief.json` con la lista numerata degli item del brief:
+**Brief manifest.** Prima di lanciare i reviewer, l'orchestratore registra
+nel report store la lista numerata degli item del brief, un id per riga su
+stdin (gli item già registrati per la feature restano; i nuovi si aggiungono):
 
-```json
-{"repo": "owner/name", "feature": "<feature>", "items": ["1", "2", "3"]}
+```bash
+printf '%s\n' 1 2 3 | python3 wf.py report brief \
+  --repo owner/name --feature <feature>
 ```
 
 `check_brief_coverage` confronta gli `item_id` del report con questa lista:
@@ -213,24 +217,34 @@ stringhe, gli stessi id che il reviewer mette in `item_id`.
    `audit.py check_reviewer_evidence_verbatim` (voce 8 di B-025).
 3. **Claim di copertura = execution, non quote** (criterio 4, claim (b)).
    Per "il test discriminava" non si quota il diff: si quota la **matrice
-   mutante→esito** del mutation prover (campo `quote` omesso o lasciato a
-   un puntatore al file della matrice). Una `quote` assente per un finding
+   mutante→esito** del mutation prover (campo `quote` omesso o lasciato al
+   nome della matrice nello store). Una `quote` assente per un finding
    di copertura non è una violazione.
 4. **`severity=fatal` non accompagnato da fix = violazione I6**. Lo stato
    è letto in `audit.py check_i6_zero_actionable` (voce 10 di B-025):
    un finding `verdict=actionable` + `severity=fatal` non risolto (cioè
    senza un commit successivo che lo chiude) fa uscire il check con
    violazione.
-5. **Il file `reports/*.jsonl` è append-only**. Riscritture o
-   cancellazioni sono una violazione di processo: la storia è la prova.
-   Il raccoglitore `gather_reviewer_reports()` legge i file di `reports/` e
-   le copie archiviate in `handoffs/*-reports/`, filtra per `repo
-   <owner/name>` e concatena; ogni riga porta il timestamp di emissione dal
-   filesystem. I report precedenti all'introduzione di `repo` non hanno
-   questo campo e vengono ignorati: l'audit non può attribuirli a un progetto
-   e non deve giudicarli contro il repo sbagliato.
+5. **Le righe vanno nel report store, che è append-only**. Il reviewer
+   consegna il suo report in un colpo solo:
+   `wf.py report add --repo-root <repo> --feature <feature> --report <feature>-<axis>[-rN]`
+   con le righe JSON su stdin. Il batch passa tutto o niente: schema, `actor`
+   e `quote` verbatim contro il diff di `commit` sono verificati prima di
+   scrivere. Una riga registrata non si riscrive né si cancella (i trigger
+   dello store rifiutano update, delete e replace): la storia è la prova, e
+   una correzione è un nuovo report (per convenzione `<report>-r2`: `report add`
+   non impone il nome). Lo store è `--store`, altrimenti `$AGENT_REPORT_STORE`,
+   altrimenti `reports.sqlite` nella cartella del workflow sotto `$XDG_STATE_HOME`
+   (se non è impostata, `~/.local/state`): `report_store.default_store_path`.
+   Il raccoglitore `gather_reviewer_reports()` legge solo lo store, filtra per
+   `repo <owner/name>` e conta una volta sola una riga registrata due volte.
+   Le righe senza `repo` (report precedenti all'introduzione del campo,
+   importati da `wf.py report import`) sono storiche: l'audit non le
+   attribuisce a nessun progetto e non le giudica contro il repo sbagliato.
+   Uno store assente è una violazione dell'audit
+   (`[B-004] no report store at <path>`), non un "nessun report".
 
 **Vista markdown per l'umano**: il coordinatore renderizza un report
-leggibile dal JSONL a chiusura della review (skill `code-review`, fase 6).
+leggibile dalle righe dello store (`wf.py report show --report R`) a chiusura della review (skill `code-review`, fase 6).
 La prosa è generata, non scritta: la fonte unica è la riga strutturata,
 quindi la regola "una fonte sola per fatto" (B-023) si applica anche qui.

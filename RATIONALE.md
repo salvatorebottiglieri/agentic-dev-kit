@@ -487,6 +487,7 @@ Each entry keeps the decision and its rationale; the private session evidence st
   an **escalation trigger** — a falsifiable condition under which the rule
   becomes `script` (e.g. "two reviewer failures of the same form in the
   same project → write the check"). The level is not promised by the main
+  agent; it is **verified** by `python3 gen-flow.py --check`, which exits
   1 if any rule has no level, and the check itself is falsified by
   `tests/test_gen_flow.py::test_livello_di_una_regola_rinominato_in_irriconoscibile`.
   The first row of the table is the caposaldo itself, so a reader sees the
@@ -494,6 +495,7 @@ Each entry keeps the decision and its rationale; the private session evidence st
 - **Rationale.**
   1. **The table was dead until it was checked.** Before the fix, the
      "Enforced by" column was aspirational — a human-readable gloss, not
+     an enforced rule. The fix is small (`gen-flow.py` already parses the
      column via `level_of`, which returns `""` if no level is recognized)
      but it converts the question "is this rule enforced by code?" into a
      command-line question with a non-zero exit on failure. This is the
@@ -656,7 +658,8 @@ Each entry keeps the decision and its rationale; the private session evidence st
   `` `audit.py check_i6_zero_actionable` (D-028) ``. The clauses (the
   "manual handoff audit" / "handoff audit" parts) are preserved — the
   judgment is still required, but it is now accompanied by a script.
-rule **visible**, not just promised. `check_invariant_verification_
+- **Rationale.** D-024 (`gen-flow.py --check`) made the level of each
+  rule **visible**, not just promised. `check_invariant_verification_
   exists` makes the same demand on the invariant registry itself: an
   invariant that says "judgment" without an accompanying tool is a
   declaration of taste, not a law. The drift this caught is small
@@ -900,3 +903,35 @@ rule **visible**, not just promised. `check_invariant_verification_
   verità; uno generato interamente non racconta il dominio. Riusare formato,
   guard e approvazione evita un secondo processo. Il limite sui flussi rende
   visibile il debito di confini invece di nasconderlo in un atlante.
+
+## D-053 — The phase harness: the workflow tells the agent what to read and checks before it moves on (2026-11-16)
+
+- **Decision.** A phase harness, `wf.py`, run from the work repo
+  (owner grilling 2026-11-16; spec D1–D10):
+  1. **D1** a harness, not a reading list: each phase hands out the next only
+     after a check.
+  2. **D2** a skip needs a reason and the owner's approval, given in chat and
+     quoted in the plan.
+  3. **D3** no state file: the phase is the first one, from 0, whose output is
+     missing or invalid.
+  4. **D4** outputs are files on the branch: `docs/specs/<feature>.md` for
+     phases 0–4, the design and model files for 5–6.
+  5. **D5** checks are structural plus the existing guards; judgment of content
+     stays with the review axes and the owner.
+  6. **D6** the phase plan is the output of phase 0, approved once; changes are
+     plan amendments with a new approval.
+  7. **D7** every `next` revalidates every earlier phase (regression).
+  8. **D8** session end is its own command, `wf end <feature>`, not phase 7.
+  9. **D9** the instructions are derived from the Pipeline and Transversal
+     tables, wrapper skills resolved one level down.
+  10. **D10** one way to approve: the owner's chat answer, quoted with its date
+      (D-043 aligned the same day).
+  Isolation is a precondition of `next`, not a phase output.
+  `WORKFLOW.md` becomes "run `wf next`"; the phase-output contract lives in
+  `phases/0-start.md`.
+- **Rationale.** What the agent reads must not depend on what the agent
+  decides to read. Deriving the phase from the outputs leaves no state to go
+  stale and lets a new session resume from the branch. Reusing the guards keeps
+  one implementation per check. One approval grammar for skips and Decisions
+  avoids two processes; a TOTP or an owner-run command was rejected as friction
+  on every skip, with an escalation trigger instead.

@@ -115,14 +115,19 @@ Every finding must quote **evidence** (file + lines + verbatim excerpt from
 the diff) and carry a **severity** (`fatal` blocks, `advisory` does not).
 A finding without evidence is not accepted.
 
-**Report format — JSONL, not prose** (D-025, B-004): each reviewer
-writes one **JSONL file** (one row per finding, newline-delimited) to
-`reports/<feature>-<axis>.jsonl`. The schema is the one documented in
+**Report format — structured rows, not prose** (D-025, B-004): each
+reviewer emits one JSON row per finding and hands the whole report to the
+report store in one batch:
+`wf.py report add --repo-root <repo> --feature <feature> --report <feature>-<axis>[-rN]`
+(rows on stdin; all or nothing — schema, `actor` and verbatim `quote` are
+checked before anything is written). The store is append-only: a correction
+is a new report (by convention `<report>-r2`; `report add` does not enforce the name). The schema is the one documented in
 `REVIEW-CRITERIA.md` § "Forma intermedia strutturata dei report" (fields:
 `criterion`, `item_id`, `verdict`, `severity`, `file`, `line`, `quote`,
 `commit`, `reviewer`, `claim`, `premise`, `repo`, `actor`, `status`). The
-markdown table the human reads is **rendered from the JSONL** at the end of
-the loop, not written first; the JSONL is the only source of truth. The
+markdown table the human reads is **rendered from the stored rows**
+(`wf.py report show --report R`) at the end of the loop, not written first;
+the store is the only source of truth. The
 orchestrator verifies the format mechanically (`audit.py check_brief_coverage`,
 `check_reviewer_evidence_verbatim`, `check_i6_zero_actionable`,
 `check_report_actor`): every brief item must have a row, every code-claim
@@ -132,9 +137,10 @@ verdict=actionable` blocks the fix loop, and every row names its `repo` and
 `spec-1`, `mutation-a`, etc.
 
 **Verify the reviewers like the code — brief coverage is mandatory.**
-Before spawning the reviewers, write `reports/<feature>-brief.json` with
-`{"repo": "owner/name", "feature": "<feature>", "items": ["1", "2", ...]}`:
-the orchestrator and the session-end audit need the list to know what "every
+Before spawning the reviewers, register the brief's item ids in the store,
+one per line on stdin:
+`printf '%s\n' 1 2 3 | wf.py report brief --repo owner/name --feature <feature>`
+(items already registered stay; new ones are appended): the orchestrator and the session-end audit need the list to know what "every
 item" means; a report for a feature with no brief manifest is rejected.
 Enumerate each reviewer's brief as a numbered list of items *before*
 spawning it (Standards: each standards file and each ADR the ticket cites;
@@ -189,8 +195,8 @@ iteration. Skip only when the item declares no invariants and has no
 
 The three reviewers are read-only and you never edit code. **You choose the
 mutants; a script executes them.** Write the target list and the
-plausible-wrong alternatives as a manifest,
-`reports/<feature>-mutation-manifest.json` (or `mutation-manifest.json`):
+plausible-wrong alternatives as a manifest and store it with
+`wf.py report manifest --name <feature>-mutation-manifest` (the JSON on stdin):
 
 ```json
 {
@@ -218,14 +224,15 @@ known-wrong mutant: it must go red first, or the test proves nothing.
 Run:
 
 ```bash
-python3 guards/mutation_prover.py reports/<feature>-mutation-manifest.json \
-  --repo-root . --out reports/<feature>-mutation.jsonl
+python3 guards/mutation_prover.py --manifest-name <feature>-mutation-manifest \
+  --repo-root . --name <feature>-mutation
 ```
 
 The script creates a clean worktree per mutant, sets `PYTHONPATH` on that
 worktree, applies the patch, runs the **control first** (green/no-test →
 matrix `inconclusive`, exit 1), then the targeted test, and removes the
-worktree. The JSONL matrix reports `pinned` / `blind-test` / `no-test` /
+worktree. The matrix, stored under `--name` (required: a name is written
+once, so a re-run takes a new one, e.g. `<feature>-mutation-r2`), reports `pinned` / `blind-test` / `no-test` /
 `error` and the diff of every mutant. `mutmut` is optional and consultative,
 never a gate.
 

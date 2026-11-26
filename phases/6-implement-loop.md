@@ -28,12 +28,14 @@
   coverage mechanically before reading a single finding
 - **mutation prover** after the three axes close: the agent chooses, for each
   declared law or `fatal` criterion, the plausible-wrong implementation and
-  writes it as a patch in `mutation-manifest.json`; `guards/mutation_prover.py`
+  writes it as a patch in a manifest stored with `wf.py report manifest --name
+  <feature>-mutation-manifest`; `guards/mutation_prover.py --manifest-name … --name …`
   applies each patch in a clean worktree, sets `PYTHONPATH` on the worktree,
   runs the **control first** (green/no-test → matrix `inconclusive`) and then
   the targeted test. A mutant that stays green is `blind-test` — the test is
-  blind — and the item goes back into the fix loop. The matrix is JSONL with
-  each mutant's diff (B-026/D-046)
+  blind — and the item goes back into the fix loop. The matrix is stored
+  under `--name`, one row per mutant with its diff; the Delivery row's
+  `Mutation:` names it (B-026/D-046)
 - **only the prover mutates** (B-007): the implementer and the fixer never
   apply a mutant, and their brief contains no mutation verb — a witness
   property is *declared*, not executed. A mutant in the session's worktree is
@@ -60,6 +62,10 @@
   them by altitude: feature-local → feature only; cross-boundary → area +
   entity; system-level → system. Moving a boundary is a `## Decision` with
   owner sign-off and Phase 3 is not skippable.
+- **ticket spec gate (I3, D-060)**: `wf.py next` and `wf.py end` fail a Delivery
+  ticket that carries neither a spec section nor a `Skipped` note; run
+  `python3 wf.py post-spec <feature>` to post the spec's sections to the tickets
+  before the merge
 - docs alignment, then the pre-push gate (canonical test + lint), then PR
   held open until CI is green
 - **before the PR**, the coordinator writes `Risk: low|med|high`,

@@ -17,7 +17,11 @@ set -euo pipefail
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "${1:-}" == "--gate" ]]; then
-  exec python3 "$KIT_DIR/guards/gate.py" install "${@:2}"
+  # In the exported public clone guards/ is copied next to this script; in the
+  # canonical repo it lives one level up, so both layouts run the same gate.
+  gate="$KIT_DIR/guards/gate.py"
+  [[ -f "$gate" ]] || gate="$KIT_DIR/../guards/gate.py"
+  exec python3 "$gate" install "${@:2}"
 fi
 SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.claude/skills}"
 SKILLS=(implement-loop product-review system-architecture modular-monolith program-design uml-modeling)

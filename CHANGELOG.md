@@ -3,55 +3,81 @@
 All notable changes to this project are documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] — 2026-11-10
+## [0.6.0] — 2026-11-26
 
-Aggiunge il modello UML per-feature: flow, sequence e state machine,
-verificati contro il codice.
+Adds the per-feature UML model (flow, sequence and state machine, checked
+against the code) and ships the phase harness and the desktop window that were
+private tools until now.
 
 ### Added
-- `skills/uml-modeling/` — tre checkpoint (dopo lo spec, dopo
-  l'architettura, prima della PR), scheletro `ModelFacts`, tabella
-  `## Model changes` con approvazione, trigger delle statechart, regole di
-  skip.
-- `guards/check_model.py` — valida la forma del modello, richiede un URL di
-  approvazione per ogni cambio semantico e, con `--gate`, risolve
-  `## Elements` contro i fatti del codice; pre-push hook quando esiste
-  `docs/models/`.
-- `guards/model_facts_python.py` — adapter Python `ast` per
-  `model-facts/1` (moduli, simboli, chiamate, route, stati enum); `--facts`
-  è l'escape hatch per gli altri linguaggi.
-- `audit.py check_model_declared` — ogni PR merged dopo il 2026-11-10
-  dichiara `Model: <path>` o `Model: n/a — <reason>`.
+- `wf.py` — the phase harness: `wf.py next <feature>` prints the files of the
+  phase the feature is in and checks the previous one before moving on; `end`
+  closes a session, `report` stores and shows review reports, `post-spec` posts
+  the spec's missing sections to its tickets (the only command that writes to
+  the tracker). A phase skill that is not installed prints as `MISSING SKILL`.
+- `report_store.py` — the report store (SQLite) that `wf.py report` and the
+  window read.
+- `app/` — the desktop window, started with `python3 app/desk.py serve` and any
+  browser: Open and History tabs, the workflow panel (the seven phases as a
+  stepper with the live phase marked), Mermaid diagrams drawn from the spec,
+  the model and the design, the system invariants with a live status
+  (`pinned`, `blind`, `never mutated`, `test missing`, `not checkable`), light
+  and dark themes, short motion that `prefers-reduced-motion` turns off, and a
+  phone view. Mermaid and marked are vendored, so it works offline; `NOTICE`
+  carries their third-party notices.
+- `gen-flow.py` and `FLOW.md` — the map of the method generated from
+  `WORKFLOW.md`, with a check that every rule is covered.
+- `phases/0-start.md` — phase 0, printed by `wf.py next` (with `LESSONS.md`
+  when you have one; the kit ships none).
+- `skills/uml-modeling/` — three checkpoints (after the spec, after the
+  architecture, before the PR), a `ModelFacts` skeleton, a `## Model changes`
+  table with approval, statechart triggers, skip rules.
+- `guards/check_model.py` — validates the shape of the model, requires an
+  approval URL for every semantic change and, with `--gate`, resolves
+  `## Elements` against the facts of the code; pre-push hook when
+  `docs/models/` exists.
+- `guards/model_facts_python.py` — Python `ast` adapter for `model-facts/1`
+  (modules, symbols, calls, routes, enum states); `--facts` is the escape
+  hatch for other languages.
+- `audit.py check_model_declared` — every PR merged after 2026-11-10 declares
+  `Model: <path>` or `Model: n/a — <reason>`.
 - Spec axis (h) in `REVIEW-CRITERIA.md`.
 
 ### Changed
-- `system-architecture` non produce più diagrammi sequence/state: possiede
-  contratti, data model e invarianti e punta a `uml-modeling`.
-- La Fase 1 appende `## Model` (flow + statechart); la Fase 3 aggiunge la
-  sequence e riconcilia; la Fase 6 produce l'as-built
-  `docs/models/<feature>.md`.
-- `WORKFLOW.md` elenca `uml-modeling` nelle fasi 1, 3, 6 e le righe di
-  enforcement del modello.
-- `install.sh` linka la sesta skill custom.
+- State directory: the harness, the store and the window keep their data in
+  `~/.local/state/agentic-dev-kit` (or `$XDG_STATE_HOME/agentic-dev-kit`).
+- The export's leak scan is stricter: it also refuses personal names and hosts
+  and any other repository of the maintainer, and it rewrites the listed client
+  names instead of letting them through.
+- `system-architecture` no longer produces sequence/state diagrams: it owns
+  contracts, data model and invariants and points to `uml-modeling`.
+- Phase 1 appends `## Model` (flow + statechart); phase 3 adds the sequence
+  and reconciles; phase 6 produces the as-built `docs/models/<feature>.md`.
+- `WORKFLOW.md` lists `uml-modeling` in phases 1, 3, 6 and the model
+  enforcement rows.
+- `install.sh` links the sixth custom skill.
 
 ### What's new for users
-- Chi non legge il codice ottiene un modello a livello di dominio con uno
-  scheletro verificabile, e ogni cambio semantico porta l'approvazione del
-  owner.
+- `python3 ~/agentic-dev-kit/wf.py next <feature>` tells the agent, and you,
+  what to read and what must be true before each phase.
+- Anyone who does not read the code gets a domain-level model with a checkable
+  skeleton, and every semantic change carries the owner's approval.
 
 ### Upgrading from v0.5.0
-- Reinstallare con `./install.sh`: l'installer linka `uml-modeling`.
-- I repo con `docs/models/` ricevono il gate pre-push; quelli senza non sono
-  toccati. Breaking changes: nessuna.
+- Reinstall with `./install.sh`: the installer links `uml-modeling`.
+- Repositories with `docs/models/` get the pre-push gate; those without are
+  untouched. The harness and the window run from the clone; the kit's skills must
+  be in the skills store `wf.py` reads (`AGENT_SKILLS_DIR=~/.agents/skills ./install.sh`).
+- Breaking changes: none.
 
 ### Verification
-- 275 test nel repo canonico, 258 nel kit generato; export `--check` senza
-  drift.
+- The export's `--check` reports no drift and the tests pass in a fresh copy
+  of the generated tree.
 
 ## [0.5.0] — 2026-11-09
 
-Aggiunge la skill `modular-monolith` e separa il README dalla reference dei
-gate. Nessuna rimozione backward-incompatible.
+Adds the `modular-monolith` skill and separates the README from the gate
+reference. No backward-incompatible removal.
 
 ### Added
 - `skills/modular-monolith/` — designs or evolves a modular monolith inside
@@ -118,10 +144,10 @@ gate. Nessuna rimozione backward-incompatible.
 
 ## [0.3.0] — 2026-11-09
 
-Promuove la `v0.3.0-rc` dopo l'uso in produzione su più repo di prodotto:
+Promotes `v0.3.0-rc` after production use across several product repos:
 design gate, JSONL reports, fixture provenance, role isolation, TDD red-first,
-mutation prover agent+script, claim labels e risk/blast-radius.
-Nessuna rimozione backward-incompatible.
+mutation prover agent+script, claim labels and risk/blast-radius.
+No backward-incompatible removal.
 
 ### Added
 - `skills/program-design/SKILL.md` — `## Decision` for load-bearing Program
@@ -165,16 +191,16 @@ Nessuna rimozione backward-incompatible.
   residual.
 - `WORKFLOW.md` sync: 40 rules (1 structure, 22 script, 17 prompt).
 
-## [0.3.0-rc] — 2026-10-15
+## 0.3.0-rc — 2026-10-15
 
-**Release candidate** — allineamento con il workflow canonico v0.3.0 (32
-regole, 1 struttura, 19 script, 12 prompt; 17 check in `audit.py`).
-Backward-compatible: nessuna rimozione, solo allineamento. Tutto ciò
-che funzionava con v0.2.0 continua a funzionare.
+**Release candidate** — alignment with the canonical v0.3.0 workflow (32
+rules, 1 structure, 19 scripts, 12 prompts; 17 checks in `audit.py`).
+Backward-compatible: no removal, only alignment. Everything that worked with
+v0.2.0 keeps working.
 
-Questa RC non è la release definitiva. Manca smoke test con Claude
-Code e validazione end-to-end; l'utente valuta in produzione prima
-di promuovere a v0.3.0. **Non consumare senza test**.
+This RC is not the final release. It lacks a smoke test with Claude Code and
+end-to-end validation; the user evaluates it in production before promoting it
+to v0.3.0. **Do not consume without testing.**
 
 ### Added
 - `guards/check_design.py` + `guards/hooks/pre-push` — the DesignDoc gate: a
@@ -189,49 +215,49 @@ di promuovere a v0.3.0. **Non consumare senza test**.
 - `audit.py` + `tests/test_audit.py` — parity with the canonical `audit.py`
   and its test suite. The canonical is the source: the kit copies it, with
   only the module-docstring example path adapted.
-- `WORKFLOW.md` è un file reale generato dal workflow canonico; la copia
-  pubblica riscrive i percorsi e omette i riferimenti privati. Non è un
-  symlink, così un clone del repo pubblico resta autosufficiente.
-- `skills/implement-loop/SKILL.md` — paragrafo *"Report format — JSONL,
-  not prose"* (D-025, B-004): i reviewer scrivono `reports/<feature>-<axis>.jsonl`
-  con schema canonico (`criterion`, `item_id`, `verdict`, `severity`,
+- `WORKFLOW.md` is a real file generated from the canonical workflow; the
+  public copy rewrites the paths and omits the private references. It is not a
+  symlink, so a clone of the public repo stays self-sufficient.
+- `skills/implement-loop/SKILL.md` — paragraph *"Report format — JSONL,
+  not prose"* (D-025, B-004): reviewers write `reports/<feature>-<axis>.jsonl`
+  with the canonical schema (`criterion`, `item_id`, `verdict`, `severity`,
   `file`, `line`, `quote`, `commit`, `reviewer`, `claim`, `premise`).
-  Il markdown è **rendered** dal JSONL, non scritto prima. I 3 check
-  meccanici di B-004 (`check_brief_coverage`, `check_reviewer_evidence_verbatim`,
-  `check_i6_zero_actionable`) verificano il formato.
-- `skills/implement-loop/SKILL.md` — I6 esplicito nel fix loop: un
-  finding `severity=fatal + verdict=actionable` deve avere
-  `status=resolved` prima dell'exit; `status=open` blocca il loop.
-  Check meccanico (`audit.py check_i6_zero_actionable`), non judgment.
-- `skills/program-design/SKILL.md` — sezione *"Premises"* (B-025 voce 2,
-  D-033): per ogni design non banale, l'agente elenca le premesse e le
-  falsifica con `{claim, verdict, evidence}`. `untested` è violazione
-  in `audit.py check_premises_falsified`. Refactor che tocca solo call
-  graphs esistenti può skippare.
-- `skills/system-architecture/SKILL.md` — regola *"`**Verification**:`
-  line is mandatory"* (B-025 voce 4, D-035): ogni invariante cita uno
-  script o funzione back-tickata che lo pinni. Mai "judgment" da solo.
-  `audit.py check_invariant_verification_exists` rifiuta il design se
-  la riga manca, cita una funzione inesistente, o dice solo "judgment".
-  È il caposaldo D-024 applicato agli invarianti di sistema.
+  The markdown is **rendered** from the JSONL, not written first. The 3
+  mechanical checks of B-004 (`check_brief_coverage`,
+  `check_reviewer_evidence_verbatim`, `check_i6_zero_actionable`) verify the
+  format.
+- `skills/implement-loop/SKILL.md` — explicit I6 in the fix loop: a finding
+  with `severity=fatal + verdict=actionable` must have `status=resolved`
+  before the exit; `status=open` blocks the loop. Mechanical check
+  (`audit.py check_i6_zero_actionable`), not judgment.
+- `skills/program-design/SKILL.md` — *"Premises"* section (B-025 item 2,
+  D-033): for every non-trivial design, the agent lists the premises and
+  falsifies them with `{claim, verdict, evidence}`. `untested` is a violation
+  in `audit.py check_premises_falsified`. A refactor that only touches existing
+  call graphs may skip.
+- `skills/system-architecture/SKILL.md` — rule *"`**Verification**:` line is
+  mandatory"* (B-025 item 4, D-035): every invariant cites a back-ticked
+  script or function that pins it. Never "judgment" alone.
+  `audit.py check_invariant_verification_exists` rejects the design if the line
+  is missing, cites a function that does not exist, or says only "judgment".
+  This is the D-024 cornerstone applied to the system invariants.
 
-### Not changed (per trasparenza)
-- `product-review` non è patchata: le regole modificate (JSONL, premesse,
-  verification) non riguardano mockup/ticket UI. Le sue istruzioni
-  interne sono auto-contenute e invariate.
-- Le skill Matt Pocock (`codebase-design`, `code-review`,
-  `ponytail-review`, `tdd`, `to-spec`, `to-tickets`, `grill-with-docs`,
-  `domain-modeling`, `ask-matt`) non sono patchate: vivono in un repo
-  upstream separato. Leggono WORKFLOW.md (aggiornato dalla copia sincronizzata) e
-  quindi traggono automaticamente beneficio dalle 32 regole senza
-  richiedere patch locali.
+### Not changed (for transparency)
+- `product-review` is not patched: the changed rules (JSONL, premises,
+  verification) do not concern mockups/UI tickets. Its internal instructions
+  are self-contained and unchanged.
+- Matt Pocock's skills (`codebase-design`, `code-review`, `ponytail-review`,
+  `tdd`, `to-spec`, `to-tickets`, `grill-with-docs`, `domain-modeling`,
+  `ask-matt`) are not patched: they live in a separate upstream repo. They
+  read WORKFLOW.md (updated by the synced copy) and so benefit automatically
+  from the 32 rules without any local patch.
 
 ### Rollback
-Le 3 patch additive non rompono il comportamento esistente. Se vuoi
-tornare a v0.2.0 in locale: `cp -a ~/.agents/skills.bak.20261015/
+The 3 additive patches do not break existing behaviour. To go back to v0.2.0
+locally: `cp -a ~/.agents/skills.bak.20261015/
 {implement-loop,product-review,program-design,system-architecture}
-~/.agents/skills/` (backup creato durante l'install). Il branch
-`v0.3.0-rc` resta intatto.
+~/.agents/skills/` (backup created during the install). The `v0.3.0-rc`
+branch stays intact.
 
 ### Related
 - The canonical workflow source is private; this kit is generated from it.
@@ -288,5 +314,9 @@ skills together, de-personalized for public use.
 - `product-review`, `system-architecture`, and `program-design` are first
   versions (WIP), not yet battle-tested.
 
+[0.6.0]: https://github.com/salvatorebottiglieri/agentic-dev-kit/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/salvatorebottiglieri/agentic-dev-kit/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/salvatorebottiglieri/agentic-dev-kit/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/salvatorebottiglieri/agentic-dev-kit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/salvatorebottiglieri/agentic-dev-kit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/salvatorebottiglieri/agentic-dev-kit/releases/tag/v0.1.0

@@ -8,8 +8,22 @@ test, and emits the matrix. The mechanical part no longer depends on the
 LLM remembering to revert a mutant or on an editable venv pointing at the
 session tree.
 
-    python3 guards/mutation_prover.py <manifest.json> [--repo-root .]
-        [--worktree-root DIR] [--out reports/<feature>-mutation.jsonl]
+    python3 guards/mutation_prover.py <manifest.json> --name NAME [--repo-root .]
+        [--worktree-root DIR] [--store PATH]
+    python3 guards/mutation_prover.py --manifest-name NAME --name NAME
+        [--store PATH] [--repo-root .]
+
+The matrix is stored in the report store under ``--name`` (required: the matrix exists
+nowhere else; without it the prover exits 2 with this usage before anything runs). A name
+is written once; the matrix is stored even when it is not all pinned, and each row keeps
+the last 30 lines of its output. ``--manifest-name`` reads the manifest from the store
+instead of a file; give exactly one of the two. The store is ``--store``, else
+``$AGENT_REPORT_STORE``, else the XDG default. A ``--name`` already stored is refused
+(exit 2) before any mutant runs.
+
+The prover needs ``report_store.py`` at the root of this guard's install (the parent of
+``guards/``). The public kit does not ship it until #20 exports it, so there the prover
+exits 2.
 
 Manifest:
 
@@ -40,12 +54,15 @@ exit 1 on a non-pinned outcome; exit 2 on a bad manifest or setup.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 
@@ -87,6 +104,15 @@ def validate_manifest(data: object) -> list[str]:
     if len(ids) != len(set(ids)):
         problems.append("mutant ids must be unique")
     return problems
+
+
+def _load_store():
+    """The report_store module at the root of this guard's install (loaded only for --name/--manifest-name)."""
+    path = Path(__file__).resolve().parent.parent / "report_store.py"
+    found = importlib.util.spec_from_file_location("mutation_prover_report_store", path)
+    module = importlib.util.module_from_spec(found)
+    found.loader.exec_module(module)
+    return module
 
 
 def classify(returncode: int) -> str:
@@ -202,17 +228,48 @@ def _run_one(
         _worktree_remove(repo, worktree)
 
 
-def run_manifest(
-    manifest_path: Path, repo_root: Path, worktree_root: Path | None = None,
-    out: Path | None = None,
-) -> int:
-    manifest_path = Path(manifest_path)
+def _store_matrix(store: Path | None, name: str, rows: list[dict]) -> int:
+    """Append the matrix to the store: 0, or 2 with a reason on stderr."""
     try:
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"mutation_prover: cannot read manifest {manifest_path}: {exc}",
-              file=sys.stderr)
+        module = _load_store()
+    except OSError as exc:
+        print(f"mutation_prover: cannot store matrix {name}: {exc}", file=sys.stderr)
         return 2
+    if store is None:
+        print(f"mutation_prover: cannot store matrix {name}: no store path given", file=sys.stderr)
+        return 2
+    try:
+        conn = module.open_store(store)
+        try:
+            module.add_matrix(conn, name, rows, datetime.now())
+        finally:
+            conn.close()
+    except module.BatchRejected as exc:
+        reasons = exc.reasons
+    except (OSError, sqlite3.Error) as exc:
+        reasons = [str(exc)]
+    else:
+        print(f"mutation_prover: matrix {name} stored", file=sys.stderr)
+        return 0
+    for reason in reasons:
+        print(f"mutation_prover: cannot store matrix {name}: {reason}", file=sys.stderr)
+    return 2
+
+
+def run_manifest(
+    manifest_path: Path | None, repo_root: Path, worktree_root: Path | None = None,
+    store: Path | None = None, *, name: str, manifest: dict | None = None,
+) -> int:
+    if manifest is not None:
+        data = manifest
+    else:
+        manifest_path = Path(manifest_path)
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"mutation_prover: cannot read manifest {manifest_path}: {exc}",
+                  file=sys.stderr)
+            return 2
     problems = validate_manifest(data)
     if problems:
         print("mutation_prover: invalid manifest:", file=sys.stderr)
@@ -242,13 +299,8 @@ def run_manifest(
         if own_root:
             shutil.rmtree(root, ignore_errors=True)
 
-    text = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n"
-    if out is None:
-        sys.stdout.write(text)
-    else:
-        out = Path(out)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+    if _store_matrix(store, name, rows) != 0:
+        return 2
 
     control_ok = rows[0]["outcome"] == "red"
     mutants_ok = all(row["outcome"] == "pinned" for row in rows[1:])
@@ -266,35 +318,59 @@ def run_manifest(
     return 0
 
 
+def _usage() -> int:
+    print("usage: mutation_prover.py (<manifest.json> | --manifest-name NAME) --name NAME "
+          "[--repo-root .] [--worktree-root DIR] [--store PATH]", file=sys.stderr)
+    return 2
+
+
 def main(argv: list[str]) -> int:
     positional: list[str] = []
-    repo_root = Path(".")
-    worktree_root: Path | None = None
-    out: Path | None = None
+    value_flags = {"--repo-root", "--worktree-root", "--store", "--name", "--manifest-name"}
+    given: dict[str, str] = {}
     i = 0
     while i < len(argv):
         arg = argv[i]
         if arg in ("-h", "--help"):
             print(__doc__.strip())
             return 0
-        if arg == "--repo-root" and i + 1 < len(argv):
-            repo_root = Path(argv[i + 1]); i += 2; continue
-        if arg == "--worktree-root" and i + 1 < len(argv):
-            worktree_root = Path(argv[i + 1]); i += 2; continue
-        if arg == "--out" and i + 1 < len(argv):
-            out = Path(argv[i + 1]); i += 2; continue
-        if arg.startswith("--repo-root="):
-            repo_root = Path(arg.split("=", 1)[1]); i += 1; continue
-        if arg.startswith("--worktree-root="):
-            worktree_root = Path(arg.split("=", 1)[1]); i += 1; continue
-        if arg.startswith("--out="):
-            out = Path(arg.split("=", 1)[1]); i += 1; continue
+        if arg in value_flags and i + 1 < len(argv):
+            given[arg] = argv[i + 1]; i += 2; continue
+        flag, _, value = arg.partition("=")
+        if flag in value_flags and "=" in arg:
+            given[flag] = value; i += 1; continue
+        if arg.startswith("--"):
+            return _usage()
         positional.append(arg); i += 1
-    if not positional:
-        print("usage: mutation_prover.py <manifest.json> [--repo-root .] "
-              "[--worktree-root DIR] [--out FILE]", file=sys.stderr)
+    repo_root = Path(given.get("--repo-root", "."))
+    worktree_root = Path(given["--worktree-root"]) if "--worktree-root" in given else None
+    name, manifest_name = given.get("--name"), given.get("--manifest-name")
+    store = Path(given["--store"]) if "--store" in given else None
+    if bool(positional) == (manifest_name is not None) or name is None:
+        return _usage()
+    manifest = None
+    try:
+        module = _load_store()
+        store = store or module.default_store_path(os.environ, Path.home())
+        conn = module.open_existing(store)
+        try:
+            if conn is not None and module.matrix_rows(conn, name) is not None:
+                print(f"mutation_prover: matrix {name} is already stored; nothing was run",
+                      file=sys.stderr)
+                return 2
+            if manifest_name is not None:
+                manifest = None if conn is None else module.manifest(conn, manifest_name)
+        finally:
+            if conn is not None:
+                conn.close()
+    except (OSError, sqlite3.Error) as exc:
+        print(f"mutation_prover: cannot use the report store: {exc}", file=sys.stderr)
         return 2
-    return run_manifest(Path(positional[0]), repo_root, worktree_root, out)
+    if manifest_name is not None and manifest is None:
+        print(f"mutation_prover: no manifest {manifest_name} in the store {store}", file=sys.stderr)
+        return 2
+    return run_manifest(Path(positional[0]) if positional else None, repo_root, worktree_root,
+                        store, name=name, manifest=manifest)
 
 
 if __name__ == "__main__":

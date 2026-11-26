@@ -222,6 +222,16 @@ def test_commas_inside_brackets_do_not_split_arguments() -> None:
     assert CD.tokens('sep=",", rows: list[tuple[int, int]]') == ["sep", "rows"]
 
 
+def test_a_comment_inside_the_argument_list_is_not_a_parameter() -> None:
+    """#119: the comment belongs to the LINE, not to the next parameter, so it is
+    stripped per line before the list is split (a `#` in a default survives)."""
+    assert CD.tokens(
+        'locations: Iterable[tuple[str, str | None]],   # (node_id, path)\n'
+        '    provenance: Iterable[tuple[str, str]]'
+    ) == ["locations", "provenance"]
+    assert CD.tokens('sep="#", rows: list[int]') == ["sep", "rows"]
+
+
 def test_bracketed_type_is_compatible_end_to_end(tmp_path: Path, capsys) -> None:
     """The same case through the gate: a declared signature identical to the code,
     with a multi-parameter generic, must be `compatible`, not `proposed`."""
@@ -255,3 +265,129 @@ def test_parenthesis_inside_a_default_does_not_cut_the_arguments(tmp_path: Path,
     status, out = _declared_vs_code(
         tmp_path, {"m.py": "def f(a, n=(1, 2), *, m):\n    ...\n"}, "m.py", code, capsys)
     assert status == 0 and "incompatible" not in out, out
+
+
+# --- issue #4: a design declares the parameters it removes -----------------------------
+
+def _removing(tmp_path: Path, files: dict[str, str], module: str, code: str,
+              removes: dict[str, list[str]], capsys, *, gate: bool) -> tuple[int, str]:
+    """Run the check over a repo made of `files` and one signature entry with `removes`."""
+    for rel, src in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(src, encoding="utf-8")
+    design = tmp_path / "design.json"
+    design.write_text(json.dumps({"signatures": [
+        {"module": module, "language": "python", "code": code, "removes": removes}]}))
+    argv = ["check_design", str(design), str(tmp_path)] + (["--gate"] if gate else [])
+    status = CD.main(argv)
+    return status, capsys.readouterr().out
+
+
+OLD_COMMIT = "def commit_turn(*, ctx, payload, describe_input, success):\n    ...\n"
+NEW_COMMIT = "def commit_turn(*, ctx, turn_input, success):\n    ...\n"
+DECLARED_COMMIT = "def commit_turn(*, ctx, turn_input, success): ..."
+REMOVES_COMMIT = {"commit_turn": ["payload", "describe_input"]}
+
+
+def test_declared_removal_of_a_required_parameter_passes_in_full_mode(tmp_path: Path, capsys) -> None:
+    """1. The code is not written yet: the design orders `payload` and `describe_input`
+    removed. Full mode accepts it with the verdict `removing`, not `incompatible`."""
+    status, out = _removing(tmp_path, {"src/http.py": OLD_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, REMOVES_COMMIT, capsys, gate=False)
+    assert status == 0, out
+    assert "removing" in out and "incompatible" not in out
+
+
+def test_gate_fails_while_the_code_still_has_the_removed_parameter(tmp_path: Path, capsys) -> None:
+    """2. After the implementation the parameter must be gone: the gate fails on `removing`."""
+    status, out = _removing(tmp_path, {"src/http.py": OLD_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, REMOVES_COMMIT, capsys, gate=True)
+    assert status == 1, out
+    assert "removing" in out and "payload" in out
+
+
+def test_gate_passes_once_the_removed_parameters_are_gone(tmp_path: Path, capsys) -> None:
+    """3. The implementation removed both: the verdict is `compatible`, the gate exits 0."""
+    status, out = _removing(tmp_path, {"src/http.py": NEW_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, REMOVES_COMMIT, capsys, gate=True)
+    assert status == 0, out
+    assert "removing" not in out
+
+
+def test_gate_catches_a_removed_parameter_that_has_a_default(tmp_path: Path, capsys) -> None:
+    """4. Omitting an optional parameter used to read as `compatible`: an implementation that
+    forgot to remove `max_download_bytes=` passed silently. Declared removed, it is caught."""
+    src = "def build_app(deps, *, serving, max_download_bytes=10):\n    ...\n"
+    status, out = _removing(tmp_path, {"src/app.py": src}, "src/app.py",
+                            "def build_app(deps, *, serving): ...",
+                            {"build_app": ["max_download_bytes"]}, capsys, gate=True)
+    assert status == 1, out
+    assert "removing" in out and "max_download_bytes" in out
+
+
+def test_class_method_removal_key_does_not_leak_to_another_class(tmp_path: Path, capsys) -> None:
+    """5. `Store.__init__` removes `bucket`; `Other.__init__` keeps its own required `bucket`.
+    The key selects the declared class only: the other class's method is judged without it,
+    so omitting its required `bucket` stays `incompatible`."""
+    src = ("class Store:\n    def __init__(self, table, bucket):\n        ...\n\n"
+           "class Other:\n    def __init__(self, bucket):\n        ...\n")
+    code = ("class Store:\n    def __init__(self, table): ...\n\n"
+            "class Other:\n    def __init__(self): ...")
+    status, out = _removing(tmp_path, {"src/store.py": src}, "src/store.py", code,
+                            {"Store.__init__": ["bucket"]}, capsys, gate=False)
+    assert status == 1, out
+    assert "removing" in out and "incompatible" in out and "missing bucket" in out
+
+
+def test_an_undeclared_missing_parameter_is_still_incompatible(tmp_path: Path, capsys) -> None:
+    """6. Control: `removes` covers `payload` only; `describe_input` is still required by the
+    code and missing from the declaration, so it stays `incompatible`."""
+    status, out = _removing(tmp_path, {"src/http.py": OLD_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, {"commit_turn": ["payload"]}, capsys, gate=False)
+    assert status == 1, out
+    assert "incompatible" in out and "missing describe_input" in out
+
+
+def test_removes_naming_a_kept_parameter_is_a_contradiction(tmp_path: Path, capsys) -> None:
+    """7. The declared signature keeps `ctx` and `removes` lists it: the document contradicts
+    itself."""
+    status, out = _removing(tmp_path, {"src/http.py": OLD_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, {"commit_turn": ["payload", "describe_input", "ctx"]},
+                            capsys, gate=False)
+    assert status == 1, out
+    assert "contradicts" in out and "ctx" in out
+
+
+def test_removes_key_matching_no_declared_function_is_a_contradiction(tmp_path: Path, capsys) -> None:
+    """A misspelt key would leave the removal undeclared: an optional parameter would then go
+    unchecked again (the hole of test 4). A key that names no def of the entry is reported."""
+    status, out = _removing(tmp_path, {"src/http.py": NEW_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, {"comit_turn": ["payload"]}, capsys, gate=True)
+    assert status == 1, out
+    assert "comit_turn" in out
+
+
+def test_allow_removing_accepts_a_pending_removal_at_the_gate(tmp_path: Path, capsys) -> None:
+    """The phase harness judges the design, valid before the removal is carried out:
+    `--gate --allow-removing` exits 0 where `--gate` alone (test 2) exits 1."""
+    for rel, src in {"src/http.py": OLD_COMMIT}.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(src, encoding="utf-8")
+    design = tmp_path / "design.json"
+    design.write_text(json.dumps({"signatures": [
+        {"module": "src/http.py", "language": "python", "code": DECLARED_COMMIT,
+         "removes": REMOVES_COMMIT}]}))
+    argv = ["check_design", str(design), str(tmp_path), "--gate"]
+    assert CD.main(argv) == 1
+    assert CD.main(argv + ["--allow-removing"]) == 0
+    capsys.readouterr()
+
+
+def test_allow_removing_does_not_excuse_an_undeclared_missing_parameter(tmp_path: Path, capsys) -> None:
+    """Control: the flag accepts only `removing`; an undeclared missing parameter stays a failure."""
+    status, out = _removing(tmp_path, {"src/http.py": OLD_COMMIT}, "src/http.py",
+                            DECLARED_COMMIT, {"commit_turn": ["payload"]}, capsys, gate=True)
+    assert status == 1
+    design = tmp_path / "design.json"
+    assert CD.main(["check_design", str(design), str(tmp_path), "--gate", "--allow-removing"]) == 1
+    capsys.readouterr()

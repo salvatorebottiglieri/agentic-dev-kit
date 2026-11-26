@@ -226,7 +226,8 @@ that is the machine part:
   "feature": "…",
   "call_stack": { "name": "…", "children": [ { "name": "…", "note": "…", "children": [] } ] },
   "file_tree": [ { "kind": "add", "path": "src/…", "note": "…" } ],
-  "signatures": [ { "module": "src/…py", "language": "python", "code": "def f(a, b=1) -> T: …" } ],
+  "signatures": [ { "module": "src/…py", "language": "python", "code": "def f(a, b=1) -> T: …",
+                   "removes": { "f": ["old_param"] } } ],
   "data_flow": {
     "nodes": [ { "id": "mod.f", "module": "src/mod.py", "kind": "add" } ],
     "edges": [ { "from": "mod.f", "to": "other.g" } ]
@@ -258,6 +259,11 @@ python3 guards/check_design.py docs/design/<feature>.md .
 - A contract that calls outside the repo (free-text `call`, or a ghost node
   whose module is not a repo file) declares `residual`: what happens to the
   exits it did not enumerate.
+- A parameter the design **removes** goes in the entry's optional `removes`
+  (`func` or `Class.method` → parameter names). Without it a removal reads as
+  `incompatible`; with it the verdict is `removing` until the code drops the
+  parameter, and `--gate` fails while it is still there — also for a parameter
+  with a default, which an omission alone never catches.
 - At pre-push and in CI the same tool runs `--gate` (signatures + coherence +
   exits + frontier). It does **not** check the design's `state`
   (`add`/`mod`/`keep`): that is true only while the code does not exist.

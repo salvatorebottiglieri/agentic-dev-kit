@@ -70,6 +70,21 @@ nothing. **Two species, and the rule covers both:**
 4. Finish with `git worktree prune`, and remove `.claude/worktrees/` when it is
    left empty — an empty directory still reads as a worktree parent to the next
    session scanning by path.
+5. **Docker artifacts the worktree created are part of the worktree.** A
+   `docker compose up` run from `../<repo>-<feature>` creates a compose
+   **project** named after that directory — its own containers, networks and
+   named volumes — and nothing in `git worktree list` records it. Removing the
+   git worktree therefore leaves them running, and a later
+   `docker compose down -v` from the primary tree removes only *that* project's
+   volumes and exits 0, looking like it cleaned everything (observed
+   2026-10-28 on `example-agent`: eight volumes across two projects, four of them
+   left behind, one of them still in use by a container the primary tree
+   believed it owned). Before removing the worktree, close the project it
+   opened: `docker compose -p <repo>-<feature> down -v`, then confirm with
+   `docker ps -a` and `docker volume ls` filtered by that prefix. A volume the
+   session cannot prove disposable follows point 3 — report it in the handoff
+   with the exact name and the command to remove it, never delete it blind.
+   The handoff names the compose project and what was removed.
 
 The asymmetry with the claim rule is deliberate and runs the other way: for
 *entering*, a stale claim is treated as live (cheap to be wrong); for

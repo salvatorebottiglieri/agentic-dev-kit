@@ -16,7 +16,14 @@ file tree, signatures, data flow, and one contract per call with its exits.
 Before the `## Program Design` section is appended to the ticket,
 `python3 guards/check_design.py <design> .` must exit **0** in full mode
 (signatures against the real code, coherence, all four exits declared and
-handled, the external frontier's `residual`). At pre-push and in CI the
+handled, the external frontier's `residual`). A signature entry declares
+the parameters the design removes with `"removes": {"func": [...],
+"Class.method": [...]}`: full mode reports them as `removing` while the code
+still has them, and `--gate` fails until the implementation has removed them
+(with or without a default). A key that names no declared def, or a removed
+parameter the declared signature still carries, is a contradiction. The harness
+judges phase 5 with `--gate --allow-removing`, so a pending removal does not block
+phase 6; the pre-push gate does not pass the flag (D-054). At pre-push and in CI the
 `--gate` subset runs the same checks minus the design's *state*, whose premise
 ("the code does not exist yet") expires once the implementation lands. The
 declared `exits` are the implementer's test list; the Spec axis judges whether
